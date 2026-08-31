@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Project output directories
+recordings/
+snapshots/
+exports/
+
+# IDE & System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Large Model Weights (Optional - yolo11n.pt is 5.6MB so it can be tracked, but downloaded weights can be ignored if desired)
+# *.pt

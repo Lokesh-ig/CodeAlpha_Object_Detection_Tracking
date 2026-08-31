@@ -1,0 +1,7 @@
+ultralytics
+opencv-python
+deep-sort-realtime
+PyQt6
+customtkinter
+Pillow
+setuptools<82
