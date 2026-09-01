@@ -23,17 +23,16 @@ except ImportError:
 
 
 # ==============================================================================
-# STREAMLIT PAGE CONFIGURATION & HIGH-TECH DASHBOARD STYLING
+# STREAMLIT PAGE CONFIGURATION & RESPONSIVE STYLING
 # ==============================================================================
 
 st.set_page_config(
-    page_title="CodeAlpha - Universal Object Tracker Web Service",
+    page_title="CodeAlpha - Universal Object Tracker Web App",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom High-Tech Cyberpunk Dark Theme
 st.markdown("""
     <style>
     .stApp {
@@ -41,43 +40,31 @@ st.markdown("""
         color: #e0e6ed;
     }
     div[data-testid="stMetricValue"] {
-        font-size: 22px;
+        font-size: 20px;
         font-weight: bold;
         color: #00f0ff;
-        font-family: 'Consolas', 'Courier New', monospace;
     }
     div[data-testid="stMetricLabel"] {
         font-size: 11px;
         color: #8898aa;
         text-transform: uppercase;
-        letter-spacing: 1px;
     }
     div[data-testid="metric-container"] {
-        background: linear-gradient(135deg, #121626 0%, #1a2035 100%);
-        border: 1px solid #00f0ff;
-        border-radius: 10px;
-        padding: 10px 14px;
-        box-shadow: 0 0 10px rgba(0, 240, 255, 0.15);
+        background-color: #121626;
+        border: 1px solid #1c2338;
+        border-radius: 8px;
+        padding: 8px 12px;
     }
     .stButton>button {
         width: 100%;
-        border-radius: 8px;
+        border-radius: 6px;
         font-weight: bold;
-        padding: 8px 14px;
-        background: linear-gradient(90deg, #121626 0%, #1e263d 100%);
-        border: 1px solid #00f0ff;
-        color: #00f0ff;
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        background: #00f0ff;
-        color: #0c0e17;
-        box-shadow: 0 0 15px rgba(0, 240, 255, 0.6);
+        padding: 6px 12px;
+        border: 1px solid #28314e;
     }
     [data-testid="stImage"] img {
-        border-radius: 12px;
+        border-radius: 8px;
         border: 2px solid #00f0ff;
-        box-shadow: 0 0 20px rgba(0, 240, 255, 0.25);
         object-fit: contain;
     }
     </style>
@@ -185,9 +172,10 @@ def main():
         st.sidebar.success("Tracker reset!")
 
     # --------------------------------------------------------------------------
-    # MAIN DISPLAY LAYOUT - HIGH TECH VIEWPORT & METRICS
+    # MAIN DISPLAY LAYOUT (PROMINENT VIEWPORT AT TOP)
     # --------------------------------------------------------------------------
 
+    # Live Metrics Header
     col1, col2, col3, col4, col5 = st.columns(5)
     kpi_fps = col1.empty()
     kpi_lat = col2.empty()
@@ -195,17 +183,17 @@ def main():
     kpi_unique = col4.empty()
     kpi_people = col5.empty()
 
-    # Clean high-definition video viewport (0 container borders, clean image frame)
-    video_placeholder = st.empty()
-
-    st.subheader("📋 Active Track Log Table")
-    table_placeholder = st.empty()
-
     kpi_fps.metric("FPS", "0.0")
     kpi_lat.metric("LATENCY", "0.0 ms")
     kpi_active.metric("ACTIVE TRACKS", "0")
     kpi_unique.metric("TOTAL UNIQUE IDs", str(len(engine.unique_track_ids)))
     kpi_people.metric("PEOPLE COUNT", "0")
+
+    # Main Video Viewport Container (Located ABOVE Table)
+    video_container = st.container()
+
+    st.subheader("📋 Active Track Log Table")
+    table_placeholder = st.empty()
 
     # --------------------------------------------------------------------------
     # STREAM PROCESSING LOOPS
@@ -227,6 +215,7 @@ def main():
             camera_active = False
 
             if cap is not None and cap.isOpened():
+                video_placeholder = video_container.empty()
                 while st.session_state.webcam_running:
                     ret, frame = cap.read()
                     if not ret or frame is None:
@@ -266,37 +255,42 @@ def main():
                     time.sleep(0.005)
 
             if not camera_active:
-                img_file_buffer = st.sidebar.camera_input("📷 Capture Camera Viewport")
-                if img_file_buffer is not None:
-                    bytes_data = img_file_buffer.getvalue()
-                    frame = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+                with video_container:
+                    img_file_buffer = st.camera_input("📷 Live Camera Stream")
+                    video_output = st.empty()
+                    if img_file_buffer is not None:
+                        bytes_data = img_file_buffer.getvalue()
+                        frame = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
 
-                    annotated_frame, stats, active_tracks = engine.process_frame(
-                        frame,
-                        conf_threshold=conf_thresh,
-                        iou_threshold=iou_thresh,
-                        show_trails=show_trails,
-                        show_labels=show_labels,
-                        show_boxes=show_boxes,
-                        show_hud=show_hud
-                    )
+                        annotated_frame, stats, active_tracks = engine.process_frame(
+                            frame,
+                            conf_threshold=conf_thresh,
+                            iou_threshold=iou_thresh,
+                            show_trails=show_trails,
+                            show_labels=show_labels,
+                            show_boxes=show_boxes,
+                            show_hud=show_hud
+                        )
 
-                    web_frame = cv2.resize(annotated_frame, (854, 480))
-                    rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
-                    video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
+                        web_frame = cv2.resize(annotated_frame, (854, 480))
+                        rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
+                        video_output.image(rgb_frame, channels="RGB", use_container_width=True)
 
-                    kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
-                    kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
-                    kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
-                    kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
-                    kpi_people.metric("PEOPLE COUNT", stats['person_count'])
+                        kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
+                        kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
+                        kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
+                        kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
+                        kpi_people.metric("PEOPLE COUNT", stats['person_count'])
 
-                    if active_tracks:
-                        df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
-                        table_placeholder.dataframe(df, use_container_width=True)
+                        if active_tracks:
+                            df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
+                            table_placeholder.dataframe(df, use_container_width=True)
 
     elif input_source == "Upload Video File (.mp4, .avi)":
-        uploaded_video = st.sidebar.file_uploader("Choose a video file", type=["mp4", "avi", "mov", "mkv"])
+        with video_container:
+            uploaded_video = st.file_uploader("📁 Choose or Drag & Drop any video file here:", type=["mp4", "avi", "mov", "mkv"])
+            video_placeholder = st.empty()
+
         if uploaded_video:
             tfile = tempfile.NamedTemporaryFile(delete=False)
             tfile.write(uploaded_video.read())
@@ -340,7 +334,10 @@ def main():
                 cap.release()
 
     elif input_source == "Upload Image File (.jpg, .png)":
-        uploaded_image = st.sidebar.file_uploader("Choose an image file", type=["jpg", "png", "jpeg"])
+        with video_container:
+            uploaded_image = st.file_uploader("Choose an image file", type=["jpg", "png", "jpeg"])
+            image_placeholder = st.empty()
+
         if uploaded_image:
             file_bytes = np.asarray(bytearray(uploaded_image.read()), dtype=np.uint8)
             frame = cv2.imdecode(file_bytes, 1)
@@ -356,7 +353,7 @@ def main():
             )
 
             rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-            video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
+            image_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
 
             kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
             kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
