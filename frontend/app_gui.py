@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSlider, QCheckBox, QComboBox, QLineEdit,
     QTableWidget, QTableWidgetItem, QFileDialog, QMessageBox, QFrame,
-    QHeaderView, QGroupBox, QSizePolicy
+    QHeaderView, QGroupBox, QSizePolicy, QScrollArea
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont
@@ -41,7 +41,7 @@ class VideoThread(QThread):
         self.source_path = 0
         self.cap = None
 
-        self.conf_threshold = 0.35
+        self.conf_threshold = 0.30
         self.iou_threshold = 0.45
         self.class_filter = []
         self.show_trails = True
@@ -132,7 +132,7 @@ class VideoThread(QThread):
 
 
 # ==============================================================================
-# MAIN GUI WINDOW (WITH SPEED & PERFORMANCE MODES)
+# MAIN GUI WINDOW (SCROLLABLE SIDEBAR & OPTIMIZED ALIGNMENT)
 # ==============================================================================
 
 class DashboardWindow(QMainWindow):
@@ -141,7 +141,6 @@ class DashboardWindow(QMainWindow):
         self.setWindowTitle("CodeAlpha - Real-Time Universal Object Detection & Tracking")
         self.resize(1600, 950)
 
-        # Default model: YOLO-World
         model_p = "yolov8s-world.pt"
         self.engine = ObjectTrackerEngine(model_p)
         self.thread = VideoThread(self.engine)
@@ -166,11 +165,15 @@ class DashboardWindow(QMainWindow):
                 font-family: 'Segoe UI', Arial, sans-serif;
                 font-size: 12px;
             }
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
             QGroupBox {
                 border: 1px solid #1f263d;
                 border-radius: 6px;
-                margin-top: 8px;
-                padding-top: 8px;
+                margin-top: 6px;
+                padding-top: 6px;
                 font-weight: bold;
                 color: #00f0ff;
             }
@@ -184,7 +187,8 @@ class DashboardWindow(QMainWindow):
                 color: #ffffff;
                 border: 1px solid #28314e;
                 border-radius: 5px;
-                padding: 6px 12px;
+                padding: 5px 10px;
+                min-height: 26px;
                 font-weight: 600;
             }
             QPushButton:hover {
@@ -216,9 +220,9 @@ class DashboardWindow(QMainWindow):
                 background-color: #102a45;
                 color: #00f0ff;
                 border: 1px solid #00f0ff;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: bold;
-                padding: 6px 14px;
+                padding: 5px 12px;
                 border-radius: 6px;
             }
             QPushButton#maxViewportButton:hover {
@@ -229,7 +233,7 @@ class DashboardWindow(QMainWindow):
                 background-color: #161b2e;
                 border: 1px solid #28314e;
                 border-radius: 5px;
-                padding: 5px 8px;
+                padding: 4px 6px;
                 color: #ffffff;
             }
             QLineEdit:focus {
@@ -305,13 +309,16 @@ class DashboardWindow(QMainWindow):
         main_layout.setSpacing(6)
 
         # ----------------------------------------------------------------------
-        # LEFT CONTROL SIDEBAR
+        # LEFT CONTROL SIDEBAR (SCROLLABLE TO PREVENT CLIPPING)
         # ----------------------------------------------------------------------
+        self.left_scroll = QScrollArea()
+        self.left_scroll.setWidgetResizable(True)
+        self.left_scroll.setFixedWidth(285)
+
         self.left_panel = QWidget()
         left_layout = QVBoxLayout(self.left_panel)
         left_layout.setContentsMargins(4, 4, 4, 4)
         left_layout.setSpacing(6)
-        self.left_panel.setFixedWidth(270)
 
         header = QLabel("⚡ CODEALPHA TRACKER")
         header.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
@@ -335,8 +342,8 @@ class DashboardWindow(QMainWindow):
         self.lbl_prompts = QLabel("World Detection Prompts:")
         mg_layout.addWidget(self.lbl_prompts)
         self.txt_prompts = QLineEdit()
-        self.txt_prompts.setText("person, object, item, gadget, bottle, phone, card, toy, hand, bag")
-        self.txt_prompts.setPlaceholderText("Comma separated e.g. person, item, tool")
+        self.txt_prompts.setText("person, cell phone, phone, smartphone, hand, object, item, bottle, gadget, card, toy, bag")
+        self.txt_prompts.setPlaceholderText("Comma separated e.g. person, phone, item")
         self.txt_prompts.editingFinished.connect(self.on_prompts_updated)
         mg_layout.addWidget(self.txt_prompts)
 
@@ -353,7 +360,7 @@ class DashboardWindow(QMainWindow):
             "⚖️ Balanced Mode (416px Recommended)",
             "🎯 Max Accuracy (640px Precision)"
         ])
-        self.speed_combo.setCurrentIndex(1)  # Default Balanced
+        self.speed_combo.setCurrentIndex(1)
         self.speed_combo.currentIndexChanged.connect(self.on_speed_changed)
         sp_layout.addWidget(self.speed_combo)
 
@@ -374,11 +381,11 @@ class DashboardWindow(QMainWindow):
         tg_layout = QVBoxLayout(tune_group)
         tg_layout.setContentsMargins(6, 6, 6, 6)
 
-        self.conf_label = QLabel("Confidence: 0.35")
+        self.conf_label = QLabel("Confidence: 0.30")
         tg_layout.addWidget(self.conf_label)
         self.conf_slider = QSlider(Qt.Orientation.Horizontal)
         self.conf_slider.setRange(5, 95)
-        self.conf_slider.setValue(35)
+        self.conf_slider.setValue(30)  # Lower default conf for handheld item detection
         self.conf_slider.valueChanged.connect(self.on_settings_changed)
         tg_layout.addWidget(self.conf_slider)
 
@@ -425,10 +432,11 @@ class DashboardWindow(QMainWindow):
 
         left_layout.addWidget(vis_group)
 
-        # 5. Action Buttons
+        # 5. Action Buttons (All fully visible & accessible!)
         act_group = QGroupBox("ACTIONS")
         ag_layout = QVBoxLayout(act_group)
         ag_layout.setContentsMargins(6, 6, 6, 6)
+        ag_layout.setSpacing(4)
 
         self.btn_toggle_play = QPushButton("⏸️ Pause Stream")
         self.btn_toggle_play.setObjectName("accentButton")
@@ -454,6 +462,8 @@ class DashboardWindow(QMainWindow):
 
         left_layout.addWidget(act_group)
         left_layout.addStretch()
+
+        self.left_scroll.setWidget(self.left_panel)
 
         # ----------------------------------------------------------------------
         # CENTER LARGE DETECTION VIEWPORT
@@ -545,7 +555,7 @@ class DashboardWindow(QMainWindow):
         self.track_table.verticalHeader().setVisible(False)
         right_layout.addWidget(self.track_table, 1)
 
-        main_layout.addWidget(self.left_panel)
+        main_layout.addWidget(self.left_scroll)
         main_layout.addWidget(center_panel, 1)
         main_layout.addWidget(self.right_panel)
 
@@ -605,14 +615,14 @@ class DashboardWindow(QMainWindow):
     def toggle_max_viewport(self):
         self.sidebars_visible = not self.sidebars_visible
         if self.sidebars_visible:
-            self.left_panel.show()
+            self.left_scroll.show()
             self.right_panel.show()
             self.btn_max_viewport.setText("📐 MAXIMIZE DETECTION AREA")
             self.btn_max_viewport.setStyleSheet("""
                 background-color: #102a45; color: #00f0ff; border: 1px solid #00f0ff;
             """)
         else:
-            self.left_panel.hide()
+            self.left_scroll.hide()
             self.right_panel.hide()
             self.btn_max_viewport.setText("🔙 SHOW CONTROLS & ANALYTICS")
             self.btn_max_viewport.setStyleSheet("""

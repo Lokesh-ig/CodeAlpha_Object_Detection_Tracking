@@ -31,8 +31,8 @@ class ObjectTrackerEngine:
     ]
 
     DEFAULT_WORLD_PROMPTS = [
-        "person", "object", "item", "gadget", "bottle", "phone",
-        "card", "toy", "hand", "bag", "cup", "chair", "laptop", "vehicle"
+        "person", "cell phone", "phone", "smartphone", "hand", "object",
+        "item", "bottle", "gadget", "card", "toy", "bag", "cup", "laptop", "vehicle"
     ]
 
     def __init__(self, model_path="yolov8s-world.pt", max_age=25, n_init=2, nms_max_overlap=0.7):
@@ -143,7 +143,7 @@ class ObjectTrackerEngine:
     def process_frame(
         self,
         frame,
-        conf_threshold=0.40,
+        conf_threshold=0.35,
         iou_threshold=0.45,
         class_filter=None,
         show_trails=True,
@@ -369,28 +369,31 @@ class ObjectTrackerEngine:
         return output_frame, stats, active_tracks_list
 
     def draw_hud_overlay(self, frame, stats):
-        """Draws a translucent HUD stats panel on the frame."""
+        """Draws a translucent HUD stats panel on the top-right of the frame to prevent badge collision."""
         h, w = frame.shape[:2]
-        panel_w = min(360, w - 20)
-        panel_h = 175
+        panel_w = min(340, w - 20)
+        panel_h = 165
+
+        x_start = w - panel_w - 10
+        y_start = 10
 
         overlay = frame.copy()
-        cv2.rectangle(overlay, (10, 10), (10 + panel_w, 10 + panel_h), (15, 15, 25), -1)
+        cv2.rectangle(overlay, (x_start, y_start), (x_start + panel_w, y_start + panel_h), (15, 15, 25), -1)
         cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
 
-        cv2.rectangle(frame, (10, 10), (10 + panel_w, 10 + panel_h), (0, 255, 180), 1)
+        cv2.rectangle(frame, (x_start, y_start), (x_start + panel_w, y_start + panel_h), (0, 255, 180), 1)
 
         cv2.putText(
             frame,
             f"HUD [{stats.get('model_name', 'YOLO')}]",
-            (20, 32),
+            (x_start + 10, y_start + 22),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
             (0, 255, 180),
             1,
             cv2.LINE_AA
         )
-        cv2.line(frame, (20, 38), (10 + panel_w - 10, 38), (0, 255, 180), 1)
+        cv2.line(frame, (x_start + 10, y_start + 28), (x_start + panel_w - 10, y_start + 28), (0, 255, 180), 1)
 
         lines = [
             f"FPS              : {stats['fps']:.1f}",
@@ -401,12 +404,12 @@ class ObjectTrackerEngine:
             f"Resolution       : {stats['resolution']}"
         ]
 
-        y_pos = 58
+        y_pos = y_start + 48
         for line in lines:
             cv2.putText(
                 frame,
                 line,
-                (20, y_pos),
+                (x_start + 10, y_pos),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.45,
                 (240, 240, 240),
@@ -416,11 +419,11 @@ class ObjectTrackerEngine:
             y_pos += 20
 
         if stats.get("is_recording"):
-            cv2.circle(frame, (10 + panel_w - 20, 25), 6, (0, 0, 255), -1)
+            cv2.circle(frame, (x_start + panel_w - 20, y_start + 20), 6, (0, 0, 255), -1)
             cv2.putText(
                 frame,
                 "REC",
-                (10 + panel_w - 50, 29),
+                (x_start + panel_w - 50, y_start + 24),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.4,
                 (0, 0, 255),
