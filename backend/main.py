@@ -44,9 +44,11 @@ def main():
     # Initialize Tracker Engine with YOLO-World Universal
     engine = ObjectTrackerEngine(model_path=MODEL_PATH)
 
-    # Open Camera
+    # Open Camera with DirectShow backend for Windows compatibility
     print(f"\nOpening Camera index {CAMERA_INDEX}...")
-    cap = cv2.VideoCapture(CAMERA_INDEX)
+    cap = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_DSHOW)
+    if not cap.isOpened():
+        cap = cv2.VideoCapture(CAMERA_INDEX)
     if not cap.isOpened():
         print("✗ Error: Could not open camera.")
         sys.exit(1)

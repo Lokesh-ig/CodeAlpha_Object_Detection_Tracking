@@ -90,11 +90,11 @@ class VideoThread(QThread):
             self.running = False
             return
 
-        self.cap = cv2.VideoCapture(self.source_path)
         if self.source_type == "webcam":
+            self.cap = cv2.VideoCapture(self.source_path, cv2.CAP_DSHOW)
             if not self.cap.isOpened():
                 alt_idx = 1 if self.source_path == 0 else 0
-                alt_cap = cv2.VideoCapture(alt_idx)
+                alt_cap = cv2.VideoCapture(alt_idx, cv2.CAP_DSHOW)
                 if alt_cap.isOpened():
                     self.cap = alt_cap
                     self.source_path = alt_idx
@@ -102,7 +102,8 @@ class VideoThread(QThread):
             if self.cap is not None and self.cap.isOpened():
                 self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
                 self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-                self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
+        else:
+            self.cap = cv2.VideoCapture(self.source_path)
 
         failed_frame_count = 0
         while self.running:

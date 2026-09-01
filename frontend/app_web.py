@@ -193,7 +193,7 @@ def main():
         if st.session_state.webcam_running:
             if st.session_state.cap is None or not st.session_state.cap.isOpened():
                 try:
-                    st.session_state.cap = cv2.VideoCapture(0)
+                    st.session_state.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
                     st.session_state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
                     st.session_state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
                 except Exception:
