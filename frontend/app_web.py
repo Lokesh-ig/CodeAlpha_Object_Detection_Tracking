@@ -228,7 +228,6 @@ def main():
 
     if input_source == "Live Webcam Stream":
         if st.session_state.webcam_running:
-            # Auto-open camera if needed
             if st.session_state.cap is None or not st.session_state.cap.isOpened():
                 try:
                     st.session_state.cap = cv2.VideoCapture(0)
@@ -278,7 +277,7 @@ def main():
                     st.rerun()
 
             if not camera_available:
-                st.info("🌐 **Cloud Mode Active**: Streamlit Cloud runs on a remote server. Capture a live picture using your browser camera below or upload a video/image in the left sidebar:")
+                st.info("🌐 **Cloud Mode Active**: Streamlit Cloud runs on a remote server. Click the **Take Photo** button inside the camera box below to detect and track your browser camera snapshot:")
                 img_file_buffer = st.camera_input("📷 Take Live Browser Camera Snapshot")
                 if img_file_buffer is not None:
                     bytes_data = img_file_buffer.getvalue()
@@ -307,6 +306,8 @@ def main():
                     if active_tracks:
                         df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
                         table_placeholder.dataframe(df, use_container_width=True)
+                    else:
+                        table_placeholder.text("No active objects currently tracked.")
 
         else:
             video_placeholder.info("⏸️ Stream is currently STOPPED. Click '▶️ Start Stream' in the sidebar to resume live tracking.")
