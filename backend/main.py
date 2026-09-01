@@ -11,11 +11,11 @@ from tracker_engine import ObjectTrackerEngine
 # CONFIGURATION
 # ==============================================================================
 
-MODEL_PATH = "yolo11n.pt"
+MODEL_PATH = "yolov8s-world.pt"
 CAMERA_INDEX = 0
 FRAME_WIDTH = 1920
 FRAME_HEIGHT = 1080
-WINDOW_NAME = "CodeAlpha - High-Tech Object Detection & Tracking HUD"
+WINDOW_NAME = "CodeAlpha - High-Tech Universal Object Detection & Tracking HUD"
 
 
 # ==============================================================================
@@ -24,10 +24,10 @@ WINDOW_NAME = "CodeAlpha - High-Tech Object Detection & Tracking HUD"
 
 def main():
     print("=" * 70)
-    print(" 🚀 CODEALPHA OBJECT DETECTION & TRACKING - HIGH-TECH HUD MODE")
+    print(" 🚀 CODEALPHA UNIVERSAL OBJECT DETECTION & TRACKING - HIGH-TECH HUD MODE")
     print("=" * 70)
 
-    # Initialize Tracker Engine
+    # Initialize Tracker Engine with YOLO-World Universal
     engine = ObjectTrackerEngine(model_path=MODEL_PATH)
 
     # Open Camera
@@ -53,6 +53,7 @@ def main():
     print("\n" + "-" * 70)
     print(" 🎮 KEYBOARD SHORTCUT CONTROLS:")
     print("   [SPACE] : Pause / Resume video stream")
+    print("   [M]     : Switch Model (YOLO-World Universal <-> YOLO11 Nano)")
     print("   [S]     : Take high-resolution snapshot")
     print("   [R]     : Toggle video stream recording (MP4)")
     print("   [T]     : Toggle motion trajectory trails")
@@ -66,9 +67,10 @@ def main():
     paused = False
     show_trails = True
     show_hud = True
-    conf_threshold = 0.50
+    conf_threshold = 0.30  # Optimized default confidence for small/handheld items
     iou_threshold = 0.45
     paused_frame = None
+    current_model = MODEL_PATH
 
     try:
         while True:
@@ -93,7 +95,6 @@ def main():
                 display_frame = annotated_frame
             else:
                 display_frame = paused_frame if paused_frame is not None else frame
-                # Draw PAUSED text overlay
                 cv2.putText(
                     display_frame,
                     "|| STREAM PAUSED",
@@ -117,6 +118,10 @@ def main():
             elif key == ord(" "):  # Space to pause/resume
                 paused = not paused
                 print(f"[State] Stream {'PAUSED' if paused else 'RESUMED'}")
+            elif key == ord("m"):  # M to switch models
+                current_model = "yolo11n.pt" if "world" in current_model else "yolov8s-world.pt"
+                engine.load_model(current_model)
+                print(f"🔄 Switched AI Model Engine -> {current_model}")
             elif key == ord("s"):  # S for Snapshot
                 snap_frame = paused_frame if paused and paused_frame is not None else frame
                 saved_path = engine.take_snapshot(snap_frame)
