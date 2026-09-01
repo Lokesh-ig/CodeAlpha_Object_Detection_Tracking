@@ -2,9 +2,23 @@ import cv2
 import time
 import os
 import sys
+import warnings
 from datetime import datetime
 
-from tracker_engine import ObjectTrackerEngine
+# Suppress non-critical third-party deprecation warnings
+warnings.filterwarnings("ignore")
+
+# Adjust Python path for backend imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
+for p in [current_dir, parent_dir]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+try:
+    from backend.tracker_engine import ObjectTrackerEngine
+except ImportError:
+    from tracker_engine import ObjectTrackerEngine
 
 
 # ==============================================================================

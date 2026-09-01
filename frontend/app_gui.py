@@ -3,12 +3,17 @@ import os
 import cv2
 import time
 import json
+import warnings
 from datetime import datetime
+
+# Suppress non-critical third-party deprecation warnings
+warnings.filterwarnings("ignore")
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+for p in [current_dir, parent_dir]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -385,7 +390,7 @@ class DashboardWindow(QMainWindow):
         tg_layout.addWidget(self.conf_label)
         self.conf_slider = QSlider(Qt.Orientation.Horizontal)
         self.conf_slider.setRange(5, 95)
-        self.conf_slider.setValue(30)  # Lower default conf for handheld item detection
+        self.conf_slider.setValue(30)
         self.conf_slider.valueChanged.connect(self.on_settings_changed)
         tg_layout.addWidget(self.conf_slider)
 
@@ -432,7 +437,7 @@ class DashboardWindow(QMainWindow):
 
         left_layout.addWidget(vis_group)
 
-        # 5. Action Buttons (All fully visible & accessible!)
+        # 5. Action Buttons
         act_group = QGroupBox("ACTIONS")
         ag_layout = QVBoxLayout(act_group)
         ag_layout.setContentsMargins(6, 6, 6, 6)
