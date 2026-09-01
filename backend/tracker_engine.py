@@ -157,9 +157,21 @@ class ObjectTrackerEngine:
 
         imgsz_to_use = yolo_imgsz if yolo_imgsz is not None else self.yolo_imgsz
 
-        # 1. YOLO Inference
+        # 1. ADAPTIVE LOW-LIGHT & BACKLIGHT BOOST
+        # Enhances dark silhouettes and backlit room lighting so YOLO never misses objects
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        mean_brightness = np.mean(gray)
+        if mean_brightness < 90:
+            gamma = 1.6
+            inv_gamma = 1.0 / gamma
+            table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+            inference_frame = cv2.LUT(frame, table)
+        else:
+            inference_frame = frame
+
+        # 2. YOLO INFERENCE
         results = self.model(
-            frame,
+            inference_frame,
             conf=conf_threshold,
             iou=iou_threshold,
             imgsz=imgsz_to_use,
