@@ -23,16 +23,17 @@ except ImportError:
 
 
 # ==============================================================================
-# STREAMLIT PAGE CONFIGURATION & RESPONSIVE STYLING
+# STREAMLIT PAGE CONFIGURATION & HIGH-TECH DASHBOARD STYLING
 # ==============================================================================
 
 st.set_page_config(
-    page_title="CodeAlpha - Universal Object Tracker Web App",
+    page_title="CodeAlpha - Universal Object Tracker Web Service",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# Custom High-Tech Cyberpunk Dark Theme
 st.markdown("""
     <style>
     .stApp {
@@ -40,31 +41,43 @@ st.markdown("""
         color: #e0e6ed;
     }
     div[data-testid="stMetricValue"] {
-        font-size: 20px;
+        font-size: 22px;
         font-weight: bold;
         color: #00f0ff;
+        font-family: 'Consolas', 'Courier New', monospace;
     }
     div[data-testid="stMetricLabel"] {
         font-size: 11px;
         color: #8898aa;
         text-transform: uppercase;
+        letter-spacing: 1px;
     }
     div[data-testid="metric-container"] {
-        background-color: #121626;
-        border: 1px solid #1c2338;
-        border-radius: 8px;
-        padding: 8px 12px;
+        background: linear-gradient(135deg, #121626 0%, #1a2035 100%);
+        border: 1px solid #00f0ff;
+        border-radius: 10px;
+        padding: 10px 14px;
+        box-shadow: 0 0 10px rgba(0, 240, 255, 0.15);
     }
     .stButton>button {
         width: 100%;
-        border-radius: 6px;
+        border-radius: 8px;
         font-weight: bold;
-        padding: 6px 12px;
-        border: 1px solid #28314e;
+        padding: 8px 14px;
+        background: linear-gradient(90deg, #121626 0%, #1e263d 100%);
+        border: 1px solid #00f0ff;
+        color: #00f0ff;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        background: #00f0ff;
+        color: #0c0e17;
+        box-shadow: 0 0 15px rgba(0, 240, 255, 0.6);
     }
     [data-testid="stImage"] img {
-        border-radius: 8px;
+        border-radius: 12px;
         border: 2px solid #00f0ff;
+        box-shadow: 0 0 20px rgba(0, 240, 255, 0.25);
         object-fit: contain;
     }
     </style>
@@ -81,7 +94,8 @@ def get_tracker_engine(model_name="yolov8s-world.pt"):
 
 
 def main():
-    st.title("🛡️ CodeAlpha - Universal Object Detection & Tracking Web App")
+    st.title("🛡️ CodeAlpha - Universal Object Detection & Tracking Web Service")
+    st.caption("Enterprise AI Vision Dashboard Powered by YOLO-World & DeepSORT")
 
     if "webcam_running" not in st.session_state:
         st.session_state.webcam_running = True
@@ -98,11 +112,11 @@ def main():
     st.sidebar.header("⚡ CONTROL CENTER")
 
     btn_col1, btn_col2 = st.sidebar.columns(2)
-    if btn_col1.button("▶️ Start"):
+    if btn_col1.button("▶️ Start Stream"):
         st.session_state.webcam_running = True
         st.rerun()
 
-    if btn_col2.button("⏹️ Pause"):
+    if btn_col2.button("⏹️ Pause Stream"):
         st.session_state.webcam_running = False
         if st.session_state.cap is not None:
             try:
@@ -152,7 +166,7 @@ def main():
     input_source = st.sidebar.selectbox(
         "Input Source",
         [
-            "Live Camera Stream (Real-Time Continuous)",
+            "Live Camera Stream",
             "Upload Video File (.mp4, .avi)",
             "Upload Image File (.jpg, .png)"
         ]
@@ -171,7 +185,7 @@ def main():
         st.sidebar.success("Tracker reset!")
 
     # --------------------------------------------------------------------------
-    # MAIN DISPLAY LAYOUT
+    # MAIN DISPLAY LAYOUT - HIGH TECH VIEWPORT & METRICS
     # --------------------------------------------------------------------------
 
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -181,6 +195,7 @@ def main():
     kpi_unique = col4.empty()
     kpi_people = col5.empty()
 
+    # Clean high-definition video viewport (0 container borders, clean image frame)
     video_placeholder = st.empty()
 
     st.subheader("📋 Active Track Log Table")
@@ -196,7 +211,7 @@ def main():
     # STREAM PROCESSING LOOPS
     # --------------------------------------------------------------------------
 
-    if input_source == "Live Camera Stream (Real-Time Continuous)":
+    if input_source == "Live Camera Stream":
         if st.session_state.webcam_running:
             if st.session_state.cap is None or not st.session_state.cap.isOpened():
                 try:
@@ -251,8 +266,7 @@ def main():
                     time.sleep(0.005)
 
             if not camera_active:
-                st.markdown("🔒 **Live Browser Camera Stream**: Click **Allow** on the camera permission prompt to start continuous live tracking:")
-                img_file_buffer = st.camera_input("📷 Live Camera Viewport")
+                img_file_buffer = st.sidebar.camera_input("📷 Capture Camera Viewport")
                 if img_file_buffer is not None:
                     bytes_data = img_file_buffer.getvalue()
                     frame = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
@@ -282,7 +296,7 @@ def main():
                         table_placeholder.dataframe(df, use_container_width=True)
 
     elif input_source == "Upload Video File (.mp4, .avi)":
-        uploaded_video = st.file_uploader("Choose a video file", type=["mp4", "avi", "mov", "mkv"])
+        uploaded_video = st.sidebar.file_uploader("Choose a video file", type=["mp4", "avi", "mov", "mkv"])
         if uploaded_video:
             tfile = tempfile.NamedTemporaryFile(delete=False)
             tfile.write(uploaded_video.read())
@@ -326,7 +340,7 @@ def main():
                 cap.release()
 
     elif input_source == "Upload Image File (.jpg, .png)":
-        uploaded_image = st.file_uploader("Choose an image file", type=["jpg", "png", "jpeg"])
+        uploaded_image = st.sidebar.file_uploader("Choose an image file", type=["jpg", "png", "jpeg"])
         if uploaded_image:
             file_bytes = np.asarray(bytearray(uploaded_image.read()), dtype=np.uint8)
             frame = cv2.imdecode(file_bytes, 1)
