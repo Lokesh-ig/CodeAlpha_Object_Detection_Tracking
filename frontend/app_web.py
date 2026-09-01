@@ -24,7 +24,7 @@ except ImportError:
 
 
 # ==============================================================================
-# STREAMLIT PAGE CONFIGURATION
+# STREAMLIT PAGE CONFIGURATION & RESPONSIVE CSS
 # ==============================================================================
 
 st.set_page_config(
@@ -34,15 +34,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Dark Theme Styling
+# Custom Dark Theme Styling & Universal Device Responsiveness
 st.markdown("""
     <style>
+    /* Main Background & Text */
     .stApp {
         background-color: #0c0e17;
         color: #e0e6ed;
     }
+
+    /* Metric Cards Styling */
     div[data-testid="stMetricValue"] {
-        font-size: 22px;
+        font-size: 20px;
         font-weight: bold;
         color: #00f0ff;
     }
@@ -50,11 +53,50 @@ st.markdown("""
         font-size: 11px;
         color: #8898aa;
         text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
+    div[data-testid="metric-container"] {
+        background-color: #121626;
+        border: 1px solid #1c2338;
+        border-radius: 8px;
+        padding: 8px 12px;
+    }
+
+    /* Sidebar Button Styling */
     .stButton>button {
         width: 100%;
         border-radius: 6px;
         font-weight: bold;
+        padding: 6px 12px;
+        border: 1px solid #28314e;
+        transition: all 0.2s ease-in-out;
+    }
+    .stButton>button:hover {
+        border-color: #00f0ff;
+        box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+    }
+
+    /* Video Player Canvas Styling */
+    [data-testid="stImage"] img {
+        border-radius: 8px;
+        border: 2px solid #00f0ff;
+        object-fit: contain;
+    }
+
+    /* Universal Responsive Layout for Mobile, Tablet, & Desktop */
+    @media (max-width: 768px) {
+        div[data-testid="column"] {
+            width: 50% !important;
+            flex: 1 1 45% !important;
+            min-width: 130px !important;
+            margin-bottom: 8px;
+        }
+        .stApp {
+            padding: 4px !important;
+        }
+        div[data-testid="stMetricValue"] {
+            font-size: 16px;
+        }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -126,7 +168,7 @@ def main():
             "⚖️ Balanced Mode (416px Recommended)",
             "🎯 Max Accuracy (640px Precision)"
         ],
-        index=0  # Default High FPS for Web
+        index=0  # Default High FPS for Web Responsiveness
     )
     if "High FPS" in speed_preset:
         engine.set_speed_preset("fast")
@@ -156,7 +198,7 @@ def main():
         st.sidebar.success("Tracker reset!")
 
     # --------------------------------------------------------------------------
-    # MAIN DISPLAY LAYOUT
+    # MAIN DISPLAY LAYOUT (AUTO-RESPONSIVE)
     # --------------------------------------------------------------------------
 
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -214,12 +256,12 @@ def main():
                             show_hud=show_hud
                         )
 
-                        # Resize frame for ultra-fast web browser rendering
+                        # Resize frame for responsive web rendering
                         web_frame = cv2.resize(annotated_frame, (854, 480))
                         rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
                         video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
 
-                        # Update KPI Metrics
+                        # Update KPI Metrics Cards
                         kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
                         kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
                         kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
