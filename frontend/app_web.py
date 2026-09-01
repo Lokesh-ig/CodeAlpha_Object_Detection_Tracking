@@ -79,41 +79,12 @@ st.markdown("""
 
 
 # ==============================================================================
-# ENGINE CACHING & INITIALIZATION
+# ENGINE CACHING & DYNAMIC INITIALIZATION
 # ==============================================================================
 
 @st.cache_resource
-def get_tracker_engine(model_name="yolo11n.pt"):
+def get_tracker_engine(model_name="yolov8s-world.pt"):
     return ObjectTrackerEngine(model_name)
-
-
-# WebRTC Processor for Continuous Live Camera Tracking (No Take Photo Button!)
-if HAS_WEBRTC:
-    class ObjectTrackingVideoProcessor(VideoProcessorBase):
-        def __init__(self):
-            self.engine = get_tracker_engine()
-            self.conf_thresh = 0.10
-            self.iou_thresh = 0.45
-            self.show_trails = True
-            self.show_boxes = True
-            self.show_labels = True
-            self.show_hud = True
-
-        def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-            img = frame.to_ndarray(format="bgr24")
-            img = cv2.flip(img, 1)
-
-            annotated_frame, stats, active_tracks = self.engine.process_frame(
-                img,
-                conf_threshold=self.conf_thresh,
-                iou_threshold=self.iou_thresh,
-                show_trails=self.show_trails,
-                show_labels=self.show_labels,
-                show_boxes=self.show_boxes,
-                show_hud=self.show_hud
-            )
-
-            return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
 
 
 def main():
@@ -152,14 +123,14 @@ def main():
     model_choice = st.sidebar.selectbox(
         "YOLO AI Model Engine",
         [
-            "⚡ YOLO11 Nano (yolo11n.pt) [Ultra Fast & Lightweight]",
-            "🎯 YOLO11 Small (yolo11s.pt)",
-            "🌍 YOLO-World Universal (yolov8s-world.pt)"
+            "🌍 YOLO-World Universal (yolov8s-world.pt)",
+            "⚡ YOLO11 Nano (yolo11n.pt) [Ultra Fast]",
+            "🎯 YOLO11 Small (yolo11s.pt)"
         ],
         index=0
     )
 
-    model_key = "yolov8s-world.pt" if "world" in model_choice else ("yolo11s.pt" if "11s" in model_choice else "yolo11n.pt")
+    model_key = "yolov8s-world.pt" if "world" in model_choice else ("yolo11n.pt" if "11n" in model_choice else "yolo11s.pt")
     engine = get_tracker_engine(model_key)
 
     if "world" in model_choice:
@@ -190,8 +161,8 @@ def main():
     input_source = st.sidebar.selectbox(
         "Input Source",
         [
-            "Live WebRTC Camera Stream (Continuous 30+ FPS Live Tracking)",
             "📹 Demo Sample Video Stream (Auto-Loop Instant AI)",
+            "Live WebRTC Camera Stream (Continuous 30+ FPS Live Tracking)",
             "Upload Video File (.mp4, .avi)",
             "Upload Image File (.jpg, .png)"
         ],
@@ -236,29 +207,7 @@ def main():
     # STREAM PROCESSING LOOPS
     # --------------------------------------------------------------------------
 
-    if input_source == "Live WebRTC Camera Stream (Continuous 30+ FPS Live Tracking)":
-        with video_container:
-            if HAS_WEBRTC:
-                ctx = webrtc_streamer(
-                    key="live-tracking-webcam",
-                    mode=WebRtcMode.SENDRECV,
-                    rtc_configuration=RTCConfiguration(
-                        {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-                    ),
-                    video_processor_factory=ObjectTrackingVideoProcessor,
-                    async_processing=True,
-                )
-                if ctx.video_processor:
-                    ctx.video_processor.conf_thresh = conf_thresh
-                    ctx.video_processor.iou_thresh = iou_thresh
-                    ctx.video_processor.show_trails = show_trails
-                    ctx.video_processor.show_boxes = show_boxes
-                    ctx.video_processor.show_labels = show_labels
-                    ctx.video_processor.show_hud = show_hud
-            else:
-                st.error("streamlit-webrtc dependency not found.")
-
-    elif input_source == "📹 Demo Sample Video Stream (Auto-Loop Instant AI)":
+    if input_source == "📹 Demo Sample Video Stream (Auto-Loop Instant AI)":
         with video_container:
             video_placeholder = st.empty()
 
@@ -337,6 +286,47 @@ def main():
                     time.sleep(0.005)
             finally:
                 cap.release()
+
+    elif input_source == "Live WebRTC Camera Stream (Continuous 30+ FPS Live Tracking)":
+        with video_container:
+            if HAS_WEBRTC:
+                class ObjectTrackingVideoProcessor(VideoProcessorBase):
+                    def __init__(self):
+                        self.engine = engine
+                        self.conf_thresh = conf_thresh
+                        self.iou_thresh = iou_thresh
+                        self.show_trails = show_trails
+                        self.show_boxes = show_boxes
+                        self.show_labels = show_labels
+                        self.show_hud = show_hud
+
+                    def recv(self, frame_in: av.VideoFrame) -> av.VideoFrame:
+                        img = frame_in.to_ndarray(format="bgr24")
+                        img = cv2.flip(img, 1)
+
+                        annotated_frame, stats, active_tracks = self.engine.process_frame(
+                            img,
+                            conf_threshold=self.conf_thresh,
+                            iou_threshold=self.iou_thresh,
+                            show_trails=self.show_trails,
+                            show_labels=self.show_labels,
+                            show_boxes=self.show_boxes,
+                            show_hud=self.show_hud
+                        )
+
+                        return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
+
+                ctx = webrtc_streamer(
+                    key=f"live-tracking-webcam-{model_key}",
+                    mode=WebRtcMode.SENDRECV,
+                    rtc_configuration=RTCConfiguration(
+                        {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+                    ),
+                    video_processor_factory=ObjectTrackingVideoProcessor,
+                    async_processing=True,
+                )
+            else:
+                st.error("streamlit-webrtc dependency not found.")
 
     elif input_source == "Upload Video File (.mp4, .avi)":
         with video_container:
