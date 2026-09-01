@@ -121,15 +121,21 @@ def main():
     if btn_col1.button("▶️ Start Stream"):
         st.session_state.webcam_running = True
         if st.session_state.cap is None or not st.session_state.cap.isOpened():
-            st.session_state.cap = cv2.VideoCapture(0)
-            st.session_state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-            st.session_state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            try:
+                st.session_state.cap = cv2.VideoCapture(0)
+                st.session_state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                st.session_state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            except Exception:
+                st.session_state.cap = None
         st.rerun()
 
     if btn_col2.button("⏹️ Stop Stream"):
         st.session_state.webcam_running = False
         if st.session_state.cap is not None:
-            st.session_state.cap.release()
+            try:
+                st.session_state.cap.release()
+            except Exception:
+                pass
             st.session_state.cap = None
         st.rerun()
 
@@ -224,14 +230,20 @@ def main():
         if st.session_state.webcam_running:
             # Auto-open camera if needed
             if st.session_state.cap is None or not st.session_state.cap.isOpened():
-                st.session_state.cap = cv2.VideoCapture(0)
-                st.session_state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-                st.session_state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                try:
+                    st.session_state.cap = cv2.VideoCapture(0)
+                    st.session_state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                    st.session_state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                except Exception:
+                    st.session_state.cap = None
 
             cap = st.session_state.cap
+            camera_available = False
+
             if cap is not None and cap.isOpened():
                 ret, frame = cap.read()
                 if ret and frame is not None:
+                    camera_available = True
                     st.session_state.frame_counter += 1
                     frame = cv2.flip(frame, 1)
 
@@ -264,10 +276,38 @@ def main():
 
                     time.sleep(0.01)
                     st.rerun()
-                else:
-                    st.warning("⚠️ Frame capture returned empty. Camera may be busy or disconnected.")
-            else:
-                st.error("✗ Unable to access camera device. Ensure no other app is using the camera.")
+
+            if not camera_available:
+                st.info("🌐 **Cloud Mode Active**: Streamlit Cloud runs on a remote server. Capture a live picture using your browser camera below or upload a video/image in the left sidebar:")
+                img_file_buffer = st.camera_input("📷 Take Live Browser Camera Snapshot")
+                if img_file_buffer is not None:
+                    bytes_data = img_file_buffer.getvalue()
+                    frame = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+
+                    annotated_frame, stats, active_tracks = engine.process_frame(
+                        frame,
+                        conf_threshold=conf_thresh,
+                        iou_threshold=iou_thresh,
+                        show_trails=show_trails,
+                        show_labels=show_labels,
+                        show_boxes=show_boxes,
+                        show_hud=show_hud
+                    )
+
+                    web_frame = cv2.resize(annotated_frame, (854, 480))
+                    rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
+                    video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
+
+                    kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
+                    kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
+                    kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
+                    kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
+                    kpi_people.metric("PEOPLE COUNT", stats['person_count'])
+
+                    if active_tracks:
+                        df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
+                        table_placeholder.dataframe(df, use_container_width=True)
+
         else:
             video_placeholder.info("⏸️ Stream is currently STOPPED. Click '▶️ Start Stream' in the sidebar to resume live tracking.")
 
