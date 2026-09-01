@@ -38,11 +38,11 @@ WINDOW_NAME = "CodeAlpha - High-Tech Object Detection & Tracking HUD"
 
 def main():
     print("=" * 70)
-    print(" 🚀 CODEALPHA UNIVERSAL OBJECT DETECTION & TRACKING - HIGH-TECH HUD MODE")
+    print(" 🚀 CODEALPHA OBJECT DETECTION & TRACKING - HIGH-TECH HUD MODE")
     print("=" * 70)
 
-    # Initialize Tracker Engine with YOLO-World Universal
-    engine = ObjectTrackerEngine(model_path=MODEL_PATH)
+    # Initialize Tracker Engine
+    engine = ObjectTrackerEngine(model_name=MODEL_PATH)
 
     # Open Camera with DirectShow backend for Windows compatibility
     print(f"\nOpening Camera index {CAMERA_INDEX}...")
