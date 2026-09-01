@@ -172,10 +172,28 @@ def main():
     conf_thresh = st.sidebar.slider("Confidence Threshold", 0.05, 0.95, 0.10, 0.05)
     iou_thresh = st.sidebar.slider("IoU Threshold", 0.05, 0.95, 0.45, 0.05)
 
+    maximize_viewport = st.sidebar.checkbox("🔍 Maximize Viewport (Full Screen Theater Mode)", value=False)
     show_trails = st.sidebar.checkbox("Trajectory Trails 🌀", value=True)
     show_boxes = st.sidebar.checkbox("Bounding Boxes 📦", value=True)
     show_labels = st.sidebar.checkbox("Class Badges 🏷️", value=True)
     show_hud = st.sidebar.checkbox("HUD Stats Panel 📊", value=True)
+
+    if maximize_viewport:
+        st.markdown("""
+            <style>
+            .main .block-container {
+                max-width: 100% !important;
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                padding-top: 1rem !important;
+            }
+            [data-testid="stImage"] img {
+                height: 80vh !important;
+                width: 100% !important;
+                object-fit: contain !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
     if st.sidebar.button("🔄 Reset Tracker"):
         engine.reset_tracker()
@@ -310,7 +328,7 @@ def main():
                             iou_threshold=self.iou_thresh,
                             show_trails=self.show_trails,
                             show_labels=self.show_labels,
-                            show_boxes=self.show_boxes,
+                            show_boxes=show_boxes,
                             show_hud=self.show_hud
                         )
 
