@@ -104,6 +104,12 @@ def main():
 
     if btn_col2.button("⏹️ Pause"):
         st.session_state.webcam_running = False
+        if st.session_state.cap is not None:
+            try:
+                st.session_state.cap.release()
+            except Exception:
+                pass
+            st.session_state.cap = None
         st.rerun()
 
     model_choice = st.sidebar.selectbox(
@@ -145,7 +151,7 @@ def main():
 
     input_source = st.sidebar.selectbox(
         "Input Source",
-        ["Live Camera Stream (Auto-Start)", "Upload Video File (.mp4, .avi)", "Upload Image File (.jpg, .png)"]
+        ["Live Camera Stream (Zero-Blink Continuous)", "Upload Video File (.mp4, .avi)", "Upload Image File (.jpg, .png)"]
     )
 
     conf_thresh = st.sidebar.slider("Confidence Threshold", 0.05, 0.95, 0.20, 0.05)
@@ -161,10 +167,9 @@ def main():
         st.sidebar.success("Tracker reset!")
 
     # --------------------------------------------------------------------------
-    # MAIN DISPLAY LAYOUT (AUTO-STARTING VIDEO CANVAS AT TOP)
+    # MAIN DISPLAY LAYOUT
     # --------------------------------------------------------------------------
 
-    # Live Metrics Cards Header
     col1, col2, col3, col4, col5 = st.columns(5)
     kpi_fps = col1.empty()
     kpi_lat = col2.empty()
@@ -172,13 +177,12 @@ def main():
     kpi_unique = col4.empty()
     kpi_people = col5.empty()
 
-    # Prominent Video Viewport at top of page
+    # In-place updating video viewport (0 DOM unmounting = 0 blinking!)
     video_placeholder = st.empty()
 
     st.subheader("📋 Active Track Log Table")
     table_placeholder = st.empty()
 
-    # Default KPI values
     kpi_fps.metric("FPS", "0.0")
     kpi_lat.metric("LATENCY", "0.0 ms")
     kpi_active.metric("ACTIVE TRACKS", "0")
@@ -186,14 +190,16 @@ def main():
     kpi_people.metric("PEOPLE COUNT", "0")
 
     # --------------------------------------------------------------------------
-    # INSTANT AUTOMATIC STREAMING LOOPS
+    # ZERO-BLINK IN-PLACE STREAMING LOOP
     # --------------------------------------------------------------------------
 
-    if input_source == "Live Camera Stream (Auto-Start)":
+    if input_source == "Live Camera Stream (Zero-Blink Continuous)":
         if st.session_state.webcam_running:
             if st.session_state.cap is None or not st.session_state.cap.isOpened():
                 try:
                     st.session_state.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                    if not st.session_state.cap.isOpened():
+                        st.session_state.cap = cv2.VideoCapture(0)
                     st.session_state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
                     st.session_state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
                 except Exception:
@@ -203,8 +209,12 @@ def main():
             camera_active = False
 
             if cap is not None and cap.isOpened():
-                ret, frame = cap.read()
-                if ret and frame is not None:
+                # In-place while loop eliminates st.rerun() script DOM unmounting & blinking!
+                while st.session_state.webcam_running:
+                    ret, frame = cap.read()
+                    if not ret or frame is None:
+                        break
+
                     camera_active = True
                     st.session_state.frame_counter += 1
                     frame = cv2.flip(frame, 1)
@@ -236,8 +246,7 @@ def main():
                         else:
                             table_placeholder.text("No active objects currently tracked.")
 
-                    time.sleep(0.01)
-                    st.rerun()
+                    time.sleep(0.005)
 
             if not camera_active:
                 img_file_buffer = st.camera_input("📷 Take Camera Snapshot")
