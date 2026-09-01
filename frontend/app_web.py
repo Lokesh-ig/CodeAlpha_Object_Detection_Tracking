@@ -154,8 +154,9 @@ def main():
     input_source = st.sidebar.selectbox(
         "Input Source",
         [
-            "Live Camera Stream",
+            "📹 Demo Sample Video Stream (Auto-Loop Instant AI)",
             "Upload Video File (.mp4, .avi)",
+            "Live Camera Stream (Webcam)",
             "Upload Image File (.jpg, .png)"
         ]
     )
@@ -198,7 +199,90 @@ def main():
     # STREAM PROCESSING LOOPS
     # --------------------------------------------------------------------------
 
-    if input_source == "Live Camera Stream":
+    if input_source == "📹 Demo Sample Video Stream (Auto-Loop Instant AI)":
+        with video_container:
+            video_placeholder = st.empty()
+
+        # Locate sample video or generate synthetic sample video
+        sample_path = os.path.join(parent_dir, "recordings", "recording_20260901_165140.mp4")
+        if not os.path.exists(sample_path):
+            sample_path = os.path.join(current_dir, "sample.mp4")
+
+        cap = cv2.VideoCapture(sample_path)
+        if not cap.isOpened():
+            # Synthetic animated frame generator if sample video not found
+            frame_idx = 0
+            while st.session_state.webcam_running:
+                frame_idx += 1
+                synthetic = np.zeros((480, 854, 3), dtype=np.uint8)
+                synthetic[:] = (20, 24, 38)
+                
+                # Draw animated object
+                cx = int(427 + 250 * np.sin(frame_idx * 0.05))
+                cy = int(240 + 100 * np.cos(frame_idx * 0.05))
+                cv2.circle(synthetic, (cx, cy), 35, (0, 240, 255), -1)
+                cv2.putText(synthetic, "Demo Tracking Object", (cx - 70, cy - 45), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+                annotated_frame, stats, active_tracks = engine.process_frame(
+                    synthetic,
+                    conf_threshold=conf_thresh,
+                    iou_threshold=iou_thresh,
+                    show_trails=show_trails,
+                    show_labels=show_labels,
+                    show_boxes=show_boxes,
+                    show_hud=show_hud
+                )
+
+                rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
+
+                kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
+                kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
+                kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
+                kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
+                kpi_people.metric("PEOPLE COUNT", stats['person_count'])
+
+                time.sleep(0.01)
+        else:
+            try:
+                frame_idx = 0
+                while st.session_state.webcam_running:
+                    ret, frame = cap.read()
+                    if not ret or frame is None:
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        continue
+
+                    frame_idx += 1
+                    annotated_frame, stats, active_tracks = engine.process_frame(
+                        frame,
+                        conf_threshold=conf_thresh,
+                        iou_threshold=iou_thresh,
+                        show_trails=show_trails,
+                        show_labels=show_labels,
+                        show_boxes=show_boxes,
+                        show_hud=show_hud
+                    )
+
+                    web_frame = cv2.resize(annotated_frame, (854, 480))
+                    rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
+                    video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
+
+                    kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
+                    kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
+                    kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
+                    kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
+                    kpi_people.metric("PEOPLE COUNT", stats['person_count'])
+
+                    if frame_idx % 3 == 0:
+                        if active_tracks:
+                            df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
+                            table_placeholder.dataframe(df, use_container_width=True)
+
+                    time.sleep(0.005)
+            finally:
+                cap.release()
+
+    elif input_source == "Live Camera Stream (Webcam)":
         if st.session_state.webcam_running:
             if st.session_state.cap is None or not st.session_state.cap.isOpened():
                 try:
