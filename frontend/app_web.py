@@ -152,8 +152,8 @@ def main():
     input_source = st.sidebar.selectbox(
         "Input Source",
         [
-            "Upload Video File (.mp4, .avi) [Recommended]",
-            "Live Camera Stream (Requires Browser Permission)",
+            "Live Camera Stream (Real-Time Continuous)",
+            "Upload Video File (.mp4, .avi)",
             "Upload Image File (.jpg, .png)"
         ]
     )
@@ -196,53 +196,7 @@ def main():
     # STREAM PROCESSING LOOPS
     # --------------------------------------------------------------------------
 
-    if input_source == "Upload Video File (.mp4, .avi) [Recommended]":
-        uploaded_video = st.file_uploader("📁 Drag and Drop any Video File (.mp4, .avi, .mov) here to start tracking:", type=["mp4", "avi", "mov", "mkv"])
-        if uploaded_video:
-            tfile = tempfile.NamedTemporaryFile(delete=False)
-            tfile.write(uploaded_video.read())
-
-            cap = cv2.VideoCapture(tfile.name)
-            try:
-                frame_idx = 0
-                while cap.isOpened() and st.session_state.webcam_running:
-                    ret, frame = cap.read()
-                    if not ret or frame is None:
-                        break
-
-                    frame_idx += 1
-                    annotated_frame, stats, active_tracks = engine.process_frame(
-                        frame,
-                        conf_threshold=conf_thresh,
-                        iou_threshold=iou_thresh,
-                        show_trails=show_trails,
-                        show_labels=show_labels,
-                        show_boxes=show_boxes,
-                        show_hud=show_hud
-                    )
-
-                    web_frame = cv2.resize(annotated_frame, (854, 480))
-                    rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
-                    video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
-
-                    kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
-                    kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
-                    kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
-                    kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
-                    kpi_people.metric("PEOPLE COUNT", stats['person_count'])
-
-                    if frame_idx % 3 == 0:
-                        if active_tracks:
-                            df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
-                            table_placeholder.dataframe(df, use_container_width=True)
-
-                    time.sleep(0.005)
-            finally:
-                cap.release()
-        else:
-            video_placeholder.info("👆 Upload any video file above to watch live AI detection & tracking in your web browser!")
-
-    elif input_source == "Live Camera Stream (Requires Browser Permission)":
+    if input_source == "Live Camera Stream (Real-Time Continuous)":
         if st.session_state.webcam_running:
             if st.session_state.cap is None or not st.session_state.cap.isOpened():
                 try:
@@ -297,8 +251,8 @@ def main():
                     time.sleep(0.005)
 
             if not camera_active:
-                st.markdown("🔒 **Browser Camera Permission**: Click **Allow** on the browser permission prompt inside the camera container below to activate your live camera feed:")
-                img_file_buffer = st.camera_input("📷 Live Camera Stream")
+                st.markdown("🔒 **Live Browser Camera Stream**: Click **Allow** on the camera permission prompt to start continuous live tracking:")
+                img_file_buffer = st.camera_input("📷 Live Camera Viewport")
                 if img_file_buffer is not None:
                     bytes_data = img_file_buffer.getvalue()
                     frame = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
@@ -326,6 +280,50 @@ def main():
                     if active_tracks:
                         df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
                         table_placeholder.dataframe(df, use_container_width=True)
+
+    elif input_source == "Upload Video File (.mp4, .avi)":
+        uploaded_video = st.file_uploader("Choose a video file", type=["mp4", "avi", "mov", "mkv"])
+        if uploaded_video:
+            tfile = tempfile.NamedTemporaryFile(delete=False)
+            tfile.write(uploaded_video.read())
+
+            cap = cv2.VideoCapture(tfile.name)
+            try:
+                frame_idx = 0
+                while cap.isOpened() and st.session_state.webcam_running:
+                    ret, frame = cap.read()
+                    if not ret or frame is None:
+                        break
+
+                    frame_idx += 1
+                    annotated_frame, stats, active_tracks = engine.process_frame(
+                        frame,
+                        conf_threshold=conf_thresh,
+                        iou_threshold=iou_thresh,
+                        show_trails=show_trails,
+                        show_labels=show_labels,
+                        show_boxes=show_boxes,
+                        show_hud=show_hud
+                    )
+
+                    web_frame = cv2.resize(annotated_frame, (854, 480))
+                    rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
+                    video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
+
+                    kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
+                    kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
+                    kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
+                    kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
+                    kpi_people.metric("PEOPLE COUNT", stats['person_count'])
+
+                    if frame_idx % 3 == 0:
+                        if active_tracks:
+                            df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
+                            table_placeholder.dataframe(df, use_container_width=True)
+
+                    time.sleep(0.005)
+            finally:
+                cap.release()
 
     elif input_source == "Upload Image File (.jpg, .png)":
         uploaded_image = st.file_uploader("Choose an image file", type=["jpg", "png", "jpeg"])
