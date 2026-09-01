@@ -2,21 +2,31 @@
 
 A high-performance real-time Object Detection and Tracking system built using **Python**, **Streamlit**, **PyQt6**, **YOLO11**, **YOLO-World Universal**, **DeepSORT**, and **OpenCV**.
 
-This project provides 3 execution modes:
-1. **🌐 Web App Dashboard (`app_web.py`)**: Browser-accessible UI built with Streamlit.
-2. **🖥️ Modern Desktop GUI Dashboard (`app_gui.py`)**: High-performance desktop application built with PyQt6.
-3. **🎮 High-Tech OpenCV HUD CLI Mode (`main.py`)**: Fast OpenCV window with keyboard shortcuts.
+---
+
+## 🌐 Live Web Demos & Cloud Services
+
+Click the links below to test the live AI detection & tracking application in your browser:
+
+- 🚀 **Streamlit Community Cloud**: [https://codealpha-object-detection-tracking.streamlit.app](https://codealpha-object-detection-tracking.streamlit.app)
+- ⚡ **Render Cloud Service**: [https://codealpha-object-detection-tracking-1urc.onrender.com](https://codealpha-object-detection-tracking-1urc.onrender.com)
 
 ---
 
 ## 🌟 Key Features
 
+This project provides 3 execution modes:
+1. **🌐 Web App Dashboard (`app_web.py`)**: Browser-accessible UI built with Streamlit & WebRTC.
+2. **🖥️ Modern Desktop GUI Dashboard (`app_gui.py`)**: High-performance desktop application built with PyQt6.
+3. **🎮 High-Tech OpenCV HUD CLI Mode (`main.py`)**: Fast OpenCV window with keyboard shortcuts.
+
 ### 🌐 Streamlit Web App Dashboard (`app_web.py`)
 - **Browser-Accessible**: Runs in any modern web browser (Chrome, Edge, Safari, Firefox).
-- **Interactive Multi-Source Inputs**: Stream live webcam, upload video files (`.mp4`, `.avi`), or process static images (`.jpg`, `.png`).
+- **Interactive Multi-Source Inputs**: Stream WebRTC live camera, auto-loop demo videos, upload video files (`.mp4`, `.avi`), or process static images (`.jpg`, `.png`).
 - **Live Analytics Metrics**: Real-time KPI cards for FPS, Latency (ms), Active Tracks, Total Unique IDs, and Person Count.
 - **YOLO-World Universal Prompt Tuning**: Type custom open-vocabulary prompts on the fly.
 - **Live Active Track Data Table**: Real-time pandas DataFrame showing track IDs, classes, confidence scores, and center coordinates.
+- **Maximize Viewport Theater Mode**: Full-screen video container expansion.
 
 ---
 
@@ -25,7 +35,7 @@ This project provides 3 execution modes:
 - **Dynamic Text Prompts**: Easily specify custom text prompts in the UI (e.g. `person, object, item, gadget, card, hand, toy, bottle, phone, bag, tool`).
 - **AI Model Engine Switcher**: Toggle seamlessly between:
   - 🌍 `YOLO-World Universal (yolov8s-world.pt)` – Open-vocabulary universal object detection.
-  - ⚡ `YOLO11 Nano (yolo11n.pt)` – Fast 80-class everyday tracker.
+  - ⚡ `YOLO11 Nano (yolo11n.pt)` – Ultra-fast 80-class everyday tracker.
   - 🎯 `YOLO11 Small (yolo11s.pt)` – High-accuracy 80-class tracker.
 
 ---
@@ -33,7 +43,7 @@ This project provides 3 execution modes:
 ## 🛠️ System Architecture
 
 ```text
-Input (Webcam / Video File / Image)
+Input (WebRTC Camera / Demo Video / Uploaded File)
            │
            ▼
  YOLO11 / YOLO-World Universal Engine
