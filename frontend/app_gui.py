@@ -386,11 +386,11 @@ class DashboardWindow(QMainWindow):
         tg_layout = QVBoxLayout(tune_group)
         tg_layout.setContentsMargins(6, 6, 6, 6)
 
-        self.conf_label = QLabel("Confidence: 0.30")
+        self.conf_label = QLabel("Confidence: 0.20")
         tg_layout.addWidget(self.conf_label)
         self.conf_slider = QSlider(Qt.Orientation.Horizontal)
         self.conf_slider.setRange(5, 95)
-        self.conf_slider.setValue(30)
+        self.conf_slider.setValue(20)
         self.conf_slider.valueChanged.connect(self.on_settings_changed)
         tg_layout.addWidget(self.conf_slider)
 

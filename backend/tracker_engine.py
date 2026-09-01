@@ -16,9 +16,9 @@ from deep_sort_realtime.deepsort_tracker import DeepSort
 
 class ObjectTrackerEngine:
     """
-    High-Performance Instant Object Detection & Tracking Engine.
-    Tuned with strict appearance feature matching (max_cosine_distance=0.2) to prevent ID swapping,
-    and optimized for low-latency web & desktop UI rendering.
+    High-Sensitivity Universal Object Detection & Tracking Engine.
+    Tuned for instant frame-1 confirmation (n_init=1), high-detail inference (imgsz=640),
+    and low confidence sensitivity (0.20 default) so objects are never missed.
     """
 
     COLOR_PALETTE = [
@@ -35,15 +35,15 @@ class ObjectTrackerEngine:
     ]
 
     DEFAULT_WORLD_PROMPTS = [
-        "person", "human", "cell phone", "phone", "smartphone", "bottle",
+        "person", "human", "face", "cell phone", "phone", "smartphone", "bottle",
         "cup", "hand", "object", "item", "gadget", "card", "toy", "bag",
         "laptop", "book", "tool", "box", "device", "accessory"
     ]
 
-    def __init__(self, model_path="yolov8s-world.pt", max_age=30, n_init=2, nms_max_overlap=0.5):
-        # max_age=30: Keeps tracks alive cleanly
-        # n_init=2: Verifies object over 2 frames to eliminate noise and track ID swapping
-        # nms_max_overlap=0.5: Prevents duplicate overlapping boxes
+    def __init__(self, model_path="yolov8s-world.pt", max_age=50, n_init=1, nms_max_overlap=0.6):
+        # max_age=50: Retains track memory even during lighting changes or rapid movements
+        # n_init=1: Instant confirmation on the very first frame an object appears!
+        # nms_max_overlap=0.6: Prevents duplicate bounding boxes
         self.max_age = max_age
         self.n_init = n_init
         self.nms_max_overlap = nms_max_overlap
@@ -53,12 +53,12 @@ class ObjectTrackerEngine:
         self.custom_prompts = list(self.DEFAULT_WORLD_PROMPTS)
         self.load_model(model_path)
 
-        print("[TrackerEngine] Initializing DeepSORT with Anti-ID Swap Matching (max_cosine_distance=0.2)...")
+        print("[TrackerEngine] Initializing DeepSORT with High-Sensitivity Tracking (n_init=1, max_age=50)...")
         self.tracker = DeepSort(
             max_age=self.max_age,
             n_init=self.n_init,
             nms_max_overlap=self.nms_max_overlap,
-            max_cosine_distance=0.2,
+            max_cosine_distance=0.3,
             nn_budget=100
         )
         print("[TrackerEngine] DeepSORT initialized.")
@@ -71,10 +71,10 @@ class ObjectTrackerEngine:
         self.previous_time = time.time()
         self.fps = 0.0
 
-        # Performance Settings
+        # High-Detail Detection Resolution (imgsz=640 for maximum accuracy)
         self.last_detections = []
         self.detection_interval = 1
-        self.yolo_imgsz = 416        # Balanced resolution for high speed & accuracy
+        self.yolo_imgsz = 640
 
         # Video recording
         self.is_recording = False
@@ -106,11 +106,11 @@ class ObjectTrackerEngine:
         if preset == "fast":
             self.yolo_imgsz = 320
             self.detection_interval = 1
-        elif preset == "accurate":
-            self.yolo_imgsz = 640
+        elif preset == "balanced":
+            self.yolo_imgsz = 512
             self.detection_interval = 1
-        else:  # balanced
-            self.yolo_imgsz = 416
+        else:  # accurate
+            self.yolo_imgsz = 640
             self.detection_interval = 1
         print(f"[TrackerEngine] Speed Preset set to '{preset}': imgsz={self.yolo_imgsz}")
 
@@ -119,8 +119,11 @@ class ObjectTrackerEngine:
         if prompt_list:
             self.custom_prompts = [p.strip() for p in prompt_list if p.strip()]
             if hasattr(self.model, "set_classes"):
-                self.model.set_classes(self.custom_prompts)
-                print(f"[TrackerEngine] Updated YOLO-World prompts: {self.custom_prompts}")
+                try:
+                    self.model.set_classes(self.custom_prompts)
+                    print(f"[TrackerEngine] Updated YOLO-World prompts: {self.custom_prompts}")
+                except Exception as err:
+                    print(f"[TrackerEngine] Error updating prompts: {err}")
 
     def get_track_color(self, track_id):
         """Generate a consistent distinct color for a given track ID."""
@@ -136,7 +139,7 @@ class ObjectTrackerEngine:
             max_age=self.max_age,
             n_init=self.n_init,
             nms_max_overlap=self.nms_max_overlap,
-            max_cosine_distance=0.2,
+            max_cosine_distance=0.3,
             nn_budget=100
         )
         self.track_history.clear()
@@ -149,7 +152,7 @@ class ObjectTrackerEngine:
     def process_frame(
         self,
         frame,
-        conf_threshold=0.30,
+        conf_threshold=0.20,
         iou_threshold=0.45,
         class_filter=None,
         show_trails=True,
@@ -159,7 +162,7 @@ class ObjectTrackerEngine:
         yolo_imgsz=None
     ):
         """
-        Processes a single frame for object detection and stable tracking without ID swapping.
+        Processes a single frame for instant object detection and ultra-stable tracking.
         """
         frame_start_time = time.time()
         self.frame_count += 1
@@ -169,7 +172,7 @@ class ObjectTrackerEngine:
         imgsz_to_use = yolo_imgsz if yolo_imgsz is not None else self.yolo_imgsz
 
         # ----------------------------------------------------
-        # 1. YOLO INFERENCE ON FRAME
+        # 1. HIGH-SENSITIVITY YOLO INFERENCE
         # ----------------------------------------------------
         results = self.model(
             frame,
@@ -217,7 +220,7 @@ class ObjectTrackerEngine:
                     continue
 
         # ----------------------------------------------------
-        # 2. ANTI-ID SWAP DEEP SORT TRACKING
+        # 2. INSTANT DEEP SORT TRACKING
         # ----------------------------------------------------
         try:
             tracks = self.tracker.update_tracks(detections, frame=frame)
@@ -249,7 +252,7 @@ class ObjectTrackerEngine:
             confidence = float(confidence)
 
             c_lower = class_name.lower()
-            if c_lower in ["person", "human"]:
+            if c_lower in ["person", "human", "face"]:
                 person_count += 1
             elif c_lower in vehicle_classes:
                 vehicle_count += 1

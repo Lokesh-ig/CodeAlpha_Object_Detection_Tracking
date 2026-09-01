@@ -208,7 +208,7 @@ def main():
     )
 
     # 5. Detection Tuning Sliders
-    conf_thresh = st.sidebar.slider("Confidence Threshold", 0.05, 0.95, 0.30, 0.05)
+    conf_thresh = st.sidebar.slider("Confidence Threshold", 0.05, 0.95, 0.20, 0.05)
     iou_thresh = st.sidebar.slider("IoU Threshold", 0.05, 0.95, 0.45, 0.05)
 
     # 6. Visual Toggles
