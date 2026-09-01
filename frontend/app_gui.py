@@ -92,13 +92,26 @@ class VideoThread(QThread):
 
         self.cap = cv2.VideoCapture(self.source_path)
         if self.source_type == "webcam":
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-            self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
+            if not self.cap.isOpened():
+                alt_idx = 1 if self.source_path == 0 else 0
+                alt_cap = cv2.VideoCapture(alt_idx)
+                if alt_cap.isOpened():
+                    self.cap = alt_cap
+                    self.source_path = alt_idx
 
+            if self.cap is not None and self.cap.isOpened():
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
+
+        failed_frame_count = 0
         while self.running:
             if self.paused:
                 self.msleep(50)
+                continue
+
+            if self.cap is None or not self.cap.isOpened():
+                self.msleep(100)
                 continue
 
             ret, frame = self.cap.read()
@@ -107,8 +120,17 @@ class VideoThread(QThread):
                     self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     continue
                 else:
+                    failed_frame_count += 1
+                    if failed_frame_count > 30:
+                        # Re-attempt opening camera if locked
+                        self.cap.release()
+                        self.msleep(200)
+                        self.cap = cv2.VideoCapture(self.source_path)
+                        failed_frame_count = 0
                     self.msleep(30)
                     continue
+
+            failed_frame_count = 0
 
             if self.source_type == "webcam":
                 frame = cv2.flip(frame, 1)
