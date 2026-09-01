@@ -5,6 +5,8 @@ PyQt6
 customtkinter
 Pillow
 streamlit
+streamlit-webrtc
+av
 plotly
 pandas
 setuptools<82

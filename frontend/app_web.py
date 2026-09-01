@@ -10,7 +10,6 @@ import streamlit as st
 
 warnings.filterwarnings("ignore")
 
-# Adjust Python path for backend imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
 for p in [current_dir, parent_dir]:
@@ -21,6 +20,13 @@ try:
     from backend.tracker_engine import ObjectTrackerEngine
 except ImportError:
     from tracker_engine import ObjectTrackerEngine
+
+try:
+    from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode, RTCConfiguration
+    import av
+    HAS_WEBRTC = True
+except ImportError:
+    HAS_WEBRTC = False
 
 
 # ==============================================================================
@@ -94,6 +100,35 @@ def get_tracker_engine(model_name="yolov8s-world.pt"):
     return ObjectTrackerEngine(model_name)
 
 
+# WebRTC Video Processor Class for Real-Time Browser Stream Tracking
+if HAS_WEBRTC:
+    class ObjectTrackingVideoProcessor(VideoProcessorBase):
+        def __init__(self):
+            self.engine = get_tracker_engine()
+            self.conf_thresh = 0.30
+            self.iou_thresh = 0.45
+            self.show_trails = True
+            self.show_boxes = True
+            self.show_labels = True
+            self.show_hud = True
+
+        def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+            img = frame.to_ndarray(format="bgr24")
+            img = cv2.flip(img, 1)
+
+            annotated_frame, stats, active_tracks = self.engine.process_frame(
+                img,
+                conf_threshold=self.conf_thresh,
+                iou_threshold=self.iou_thresh,
+                show_trails=self.show_trails,
+                show_labels=show_labels,
+                show_boxes=show_boxes,
+                show_hud=self.show_hud
+            )
+
+            return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
+
+
 # Main Streamlit App
 def main():
     st.title("🛡️ CodeAlpha - Universal Object Detection & Tracking Web App")
@@ -120,23 +155,10 @@ def main():
 
     if btn_col1.button("▶️ Start Stream"):
         st.session_state.webcam_running = True
-        if st.session_state.cap is None or not st.session_state.cap.isOpened():
-            try:
-                st.session_state.cap = cv2.VideoCapture(0)
-                st.session_state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-                st.session_state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-            except Exception:
-                st.session_state.cap = None
         st.rerun()
 
     if btn_col2.button("⏹️ Stop Stream"):
         st.session_state.webcam_running = False
-        if st.session_state.cap is not None:
-            try:
-                st.session_state.cap.release()
-            except Exception:
-                pass
-            st.session_state.cap = None
         st.rerun()
 
     # 1. Model Selector
@@ -182,7 +204,7 @@ def main():
     # 4. Input Source Selection
     input_source = st.sidebar.selectbox(
         "Input Source",
-        ["Live Webcam Stream", "Upload Video File (.mp4, .avi)", "Upload Image File (.jpg, .png)"]
+        ["Live WebRTC Browser Stream (Real-Time Tracking)", "Upload Video File (.mp4, .avi)", "Camera Snapshot / Static Image"]
     )
 
     # 5. Detection Tuning Sliders
@@ -226,91 +248,27 @@ def main():
     # STREAM PROCESSING LOOPS
     # --------------------------------------------------------------------------
 
-    if input_source == "Live Webcam Stream":
-        if st.session_state.webcam_running:
-            if st.session_state.cap is None or not st.session_state.cap.isOpened():
-                try:
-                    st.session_state.cap = cv2.VideoCapture(0)
-                    st.session_state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-                    st.session_state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-                except Exception:
-                    st.session_state.cap = None
-
-            cap = st.session_state.cap
-            camera_available = False
-
-            if cap is not None and cap.isOpened():
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    camera_available = True
-                    st.session_state.frame_counter += 1
-                    frame = cv2.flip(frame, 1)
-
-                    annotated_frame, stats, active_tracks = engine.process_frame(
-                        frame,
-                        conf_threshold=conf_thresh,
-                        iou_threshold=iou_thresh,
-                        show_trails=show_trails,
-                        show_labels=show_labels,
-                        show_boxes=show_boxes,
-                        show_hud=show_hud
-                    )
-
-                    web_frame = cv2.resize(annotated_frame, (854, 480))
-                    rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
-                    video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
-
-                    kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
-                    kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
-                    kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
-                    kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
-                    kpi_people.metric("PEOPLE COUNT", stats['person_count'])
-
-                    if st.session_state.frame_counter % 3 == 0:
-                        if active_tracks:
-                            df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
-                            table_placeholder.dataframe(df, use_container_width=True)
-                        else:
-                            table_placeholder.text("No active objects currently tracked.")
-
-                    time.sleep(0.01)
-                    st.rerun()
-
-            if not camera_available:
-                st.info("🌐 **Cloud Mode Active**: Streamlit Cloud runs on a remote server. Click the **Take Photo** button inside the camera box below to detect and track your browser camera snapshot:")
-                img_file_buffer = st.camera_input("📷 Take Live Browser Camera Snapshot")
-                if img_file_buffer is not None:
-                    bytes_data = img_file_buffer.getvalue()
-                    frame = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
-
-                    annotated_frame, stats, active_tracks = engine.process_frame(
-                        frame,
-                        conf_threshold=conf_thresh,
-                        iou_threshold=iou_thresh,
-                        show_trails=show_trails,
-                        show_labels=show_labels,
-                        show_boxes=show_boxes,
-                        show_hud=show_hud
-                    )
-
-                    web_frame = cv2.resize(annotated_frame, (854, 480))
-                    rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
-                    video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
-
-                    kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
-                    kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
-                    kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
-                    kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
-                    kpi_people.metric("PEOPLE COUNT", stats['person_count'])
-
-                    if active_tracks:
-                        df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
-                        table_placeholder.dataframe(df, use_container_width=True)
-                    else:
-                        table_placeholder.text("No active objects currently tracked.")
-
+    if input_source == "Live WebRTC Browser Stream (Real-Time Tracking)":
+        if HAS_WEBRTC:
+            st.info("🎥 **Real-Time WebRTC Live Tracking**: Click **START** on the video window below to stream your camera live with real-time detection & tracking!")
+            ctx = webrtc_streamer(
+                key="object-tracker-stream",
+                mode=WebRtcMode.SENDRECV,
+                rtc_configuration=RTCConfiguration(
+                    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+                ),
+                video_processor_factory=ObjectTrackingVideoProcessor,
+                async_processing=True,
+            )
+            if ctx.video_processor:
+                ctx.video_processor.conf_thresh = conf_thresh
+                ctx.video_processor.iou_thresh = iou_thresh
+                ctx.video_processor.show_trails = show_trails
+                ctx.video_processor.show_boxes = show_boxes
+                ctx.video_processor.show_labels = show_labels
+                ctx.video_processor.show_hud = show_hud
         else:
-            video_placeholder.info("⏸️ Stream is currently STOPPED. Click '▶️ Start Stream' in the sidebar to resume live tracking.")
+            st.error("streamlit-webrtc package not found.")
 
     elif input_source == "Upload Video File (.mp4, .avi)":
         uploaded_video = st.sidebar.file_uploader("Choose a video file", type=["mp4", "avi", "mov", "mkv"])
@@ -356,14 +314,21 @@ def main():
             finally:
                 cap.release()
 
-    elif input_source == "Upload Image File (.jpg, .png)":
-        uploaded_image = st.sidebar.file_uploader("Choose an image file", type=["jpg", "png", "jpeg"])
+    elif input_source == "Camera Snapshot / Static Image":
+        uploaded_image = st.file_uploader("Choose an image file", type=["jpg", "png", "jpeg"])
+        img_file_buffer = st.camera_input("📷 Take Live Camera Snapshot")
+
+        target_frame = None
         if uploaded_image:
             file_bytes = np.asarray(bytearray(uploaded_image.read()), dtype=np.uint8)
-            frame = cv2.imdecode(file_bytes, 1)
+            target_frame = cv2.imdecode(file_bytes, 1)
+        elif img_file_buffer:
+            bytes_data = img_file_buffer.getvalue()
+            target_frame = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
 
+        if target_frame is not None:
             annotated_frame, stats, active_tracks = engine.process_frame(
-                frame,
+                target_frame,
                 conf_threshold=conf_thresh,
                 iou_threshold=iou_thresh,
                 show_trails=show_trails,
