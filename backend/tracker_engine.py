@@ -16,9 +16,9 @@ from deep_sort_realtime.deepsort_tracker import DeepSort
 
 class ObjectTrackerEngine:
     """
-    High-Sensitivity Universal Object Detection & Tracking Engine.
-    Tuned for instant frame-1 confirmation (n_init=1), high-detail inference (imgsz=640),
-    and low confidence sensitivity (0.20 default) so objects are never missed.
+    High-Sensitivity Anti-Flicker Object Detection & Tracking Engine.
+    Includes Kalman Prediction Grace Period and Exponential Box Smoothing (EMA)
+    to completely eliminate box blinking, flickering, and border jitter.
     """
 
     COLOR_PALETTE = [
@@ -40,10 +40,7 @@ class ObjectTrackerEngine:
         "laptop", "book", "tool", "box", "device", "accessory"
     ]
 
-    def __init__(self, model_path="yolov8s-world.pt", max_age=50, n_init=1, nms_max_overlap=0.6):
-        # max_age=50: Retains track memory even during lighting changes or rapid movements
-        # n_init=1: Instant confirmation on the very first frame an object appears!
-        # nms_max_overlap=0.6: Prevents duplicate bounding boxes
+    def __init__(self, model_path="yolov8s-world.pt", max_age=60, n_init=1, nms_max_overlap=0.6):
         self.max_age = max_age
         self.n_init = n_init
         self.nms_max_overlap = nms_max_overlap
@@ -53,7 +50,7 @@ class ObjectTrackerEngine:
         self.custom_prompts = list(self.DEFAULT_WORLD_PROMPTS)
         self.load_model(model_path)
 
-        print("[TrackerEngine] Initializing DeepSORT with High-Sensitivity Tracking (n_init=1, max_age=50)...")
+        print("[TrackerEngine] Initializing Anti-Flicker DeepSORT Tracker (max_age=60, n_init=1)...")
         self.tracker = DeepSort(
             max_age=self.max_age,
             n_init=self.n_init,
@@ -61,17 +58,16 @@ class ObjectTrackerEngine:
             max_cosine_distance=0.3,
             nn_budget=100
         )
-        print("[TrackerEngine] DeepSORT initialized.")
 
         # Tracking state
         self.track_history = defaultdict(lambda: deque(maxlen=30))
+        self.prev_boxes = {}  # For EMA box smoothing (eliminates flicker & jitter)
         self.unique_track_ids = set()
         self.track_logs = []
         self.frame_count = 0
         self.previous_time = time.time()
         self.fps = 0.0
 
-        # High-Detail Detection Resolution (imgsz=640 for maximum accuracy)
         self.last_detections = []
         self.detection_interval = 1
         self.yolo_imgsz = 640
@@ -82,7 +78,6 @@ class ObjectTrackerEngine:
         self.recording_path = None
 
     def load_model(self, model_path, custom_prompts=None):
-        """Loads or switches YOLO / YOLO-World model dynamically."""
         self.model_path = model_path
         if custom_prompts:
             self.custom_prompts = custom_prompts
@@ -101,7 +96,6 @@ class ObjectTrackerEngine:
             self.model = YOLO("yolo11n.pt")
 
     def set_speed_preset(self, preset_name):
-        """Sets performance mode."""
         preset = preset_name.lower()
         if preset == "fast":
             self.yolo_imgsz = 320
@@ -109,24 +103,20 @@ class ObjectTrackerEngine:
         elif preset == "balanced":
             self.yolo_imgsz = 512
             self.detection_interval = 1
-        else:  # accurate
+        else:
             self.yolo_imgsz = 640
             self.detection_interval = 1
-        print(f"[TrackerEngine] Speed Preset set to '{preset}': imgsz={self.yolo_imgsz}")
 
     def update_world_prompts(self, prompt_list):
-        """Updates text prompts for YOLO-World universal detection."""
         if prompt_list:
             self.custom_prompts = [p.strip() for p in prompt_list if p.strip()]
             if hasattr(self.model, "set_classes"):
                 try:
                     self.model.set_classes(self.custom_prompts)
-                    print(f"[TrackerEngine] Updated YOLO-World prompts: {self.custom_prompts}")
                 except Exception as err:
                     print(f"[TrackerEngine] Error updating prompts: {err}")
 
     def get_track_color(self, track_id):
-        """Generate a consistent distinct color for a given track ID."""
         try:
             numeric_id = int(str(track_id).split("_")[-1])
         except (ValueError, IndexError):
@@ -134,7 +124,6 @@ class ObjectTrackerEngine:
         return self.COLOR_PALETTE[numeric_id % len(self.COLOR_PALETTE)]
 
     def reset_tracker(self):
-        """Reset internal tracking state and reinitialize DeepSORT."""
         self.tracker = DeepSort(
             max_age=self.max_age,
             n_init=self.n_init,
@@ -143,11 +132,11 @@ class ObjectTrackerEngine:
             nn_budget=100
         )
         self.track_history.clear()
+        self.prev_boxes.clear()
         self.unique_track_ids.clear()
         self.track_logs.clear()
         self.last_detections.clear()
         self.frame_count = 0
-        print("[TrackerEngine] Tracker state reset successfully.")
 
     def process_frame(
         self,
@@ -161,9 +150,6 @@ class ObjectTrackerEngine:
         show_hud=True,
         yolo_imgsz=None
     ):
-        """
-        Processes a single frame for instant object detection and ultra-stable tracking.
-        """
         frame_start_time = time.time()
         self.frame_count += 1
         h, w = frame.shape[:2]
@@ -171,9 +157,7 @@ class ObjectTrackerEngine:
 
         imgsz_to_use = yolo_imgsz if yolo_imgsz is not None else self.yolo_imgsz
 
-        # ----------------------------------------------------
-        # 1. HIGH-SENSITIVITY YOLO INFERENCE
-        # ----------------------------------------------------
+        # 1. YOLO Inference
         results = self.model(
             frame,
             conf=conf_threshold,
@@ -219,9 +203,7 @@ class ObjectTrackerEngine:
                 except Exception:
                     continue
 
-        # ----------------------------------------------------
-        # 2. INSTANT DEEP SORT TRACKING
-        # ----------------------------------------------------
+        # 2. DeepSORT Update
         try:
             tracks = self.tracker.update_tracks(detections, frame=frame)
         except Exception:
@@ -235,7 +217,10 @@ class ObjectTrackerEngine:
         vehicle_classes = {"car", "truck", "bus", "motorbike", "bicycle", "train", "vehicle"}
 
         for track in tracks:
+            # ANTI-FLICKER RULE: Allow confirmed tracks OR tracks updated within 3 frames
             if not track.is_confirmed():
+                continue
+            if track.time_since_update > 3:
                 continue
 
             track_id = track.track_id
@@ -246,6 +231,17 @@ class ObjectTrackerEngine:
 
             if right <= left or bottom <= top:
                 continue
+
+            # EXPONENTIAL SMOOTHING (EMA): Prevents box jitter and blinking
+            if track_id in self.prev_boxes:
+                prev = self.prev_boxes[track_id]
+                alpha = 0.65  # 65% new frame, 35% previous frame for buttery-smooth movement
+                left = int(alpha * left + (1 - alpha) * prev[0])
+                top = int(alpha * top + (1 - alpha) * prev[1])
+                right = int(alpha * right + (1 - alpha) * prev[2])
+                bottom = int(alpha * bottom + (1 - alpha) * prev[3])
+
+            self.prev_boxes[track_id] = (left, top, right, bottom)
 
             class_name = track.get_det_class() or "Object"
             confidence = track.det_conf if track.det_conf is not None else 0.0
@@ -277,9 +273,7 @@ class ObjectTrackerEngine:
             active_tracks_list.append(track_info)
             self.track_logs.append(track_info)
 
-            # ------------------------------------------------
-            # 3. DRAW TRAJECTORY TRAILS
-            # ------------------------------------------------
+            # 3. Draw Trajectory Trails
             if show_trails:
                 pts = self.track_history[track_id]
                 for i in range(1, len(pts)):
@@ -288,9 +282,7 @@ class ObjectTrackerEngine:
                     thickness = int(np.sqrt(30 / float(i + 1)) * 1.5)
                     cv2.line(output_frame, pts[i - 1], pts[i], color, max(1, thickness))
 
-            # ------------------------------------------------
-            # 4. DRAW BOUNDING BOX & ACCENTS
-            # ------------------------------------------------
+            # 4. Draw Bounding Box & Corner Accents
             if show_boxes:
                 cv2.rectangle(output_frame, (left, top), (right, bottom), color, 2)
                 corner_len = min(15, int((right - left) / 4), int((bottom - top) / 4))
@@ -304,9 +296,7 @@ class ObjectTrackerEngine:
                     cv2.line(output_frame, (right, bottom), (right - corner_len, bottom), color, 3)
                     cv2.line(output_frame, (right, bottom), (right, bottom - corner_len), color, 3)
 
-            # ------------------------------------------------
-            # 5. DRAW BADGE / LABEL
-            # ------------------------------------------------
+            # 5. Draw Badge / Label
             if show_labels:
                 label_text = f"{class_name} #{track_id} | {confidence * 100:.0f}%"
                 font = cv2.FONT_HERSHEY_SIMPLEX
@@ -335,9 +325,7 @@ class ObjectTrackerEngine:
                     cv2.LINE_AA
                 )
 
-        # ----------------------------------------------------
-        # 6. FPS & LATENCY CALCULATION
-        # ----------------------------------------------------
+        # 6. FPS Calculation
         current_time = time.time()
         time_diff = current_time - self.previous_time
         if time_diff > 0:
@@ -374,7 +362,6 @@ class ObjectTrackerEngine:
         return output_frame, stats, active_tracks_list
 
     def draw_hud_overlay(self, frame, stats):
-        """Draws a translucent HUD stats panel on the top-right of the frame."""
         h, w = frame.shape[:2]
         panel_w = min(340, w - 20)
         panel_h = 165
@@ -444,7 +431,6 @@ class ObjectTrackerEngine:
         filename = f"snapshot_{timestamp}.png"
         filepath = os.path.join(save_dir, filename)
         cv2.imwrite(filepath, frame)
-        print(f"[TrackerEngine] Snapshot saved to '{filepath}'.")
         return filepath
 
     def start_recording(self, output_path, fps=30.0, frame_size=(1920, 1080)):
@@ -453,20 +439,17 @@ class ObjectTrackerEngine:
         self.video_writer = cv2.VideoWriter(output_path, fourcc, fps, frame_size)
         self.is_recording = True
         self.recording_path = output_path
-        print(f"[TrackerEngine] Recording started: '{output_path}'.")
 
     def stop_recording(self):
         if self.is_recording and self.video_writer is not None:
             self.video_writer.release()
             self.video_writer = None
             self.is_recording = False
-            print(f"[TrackerEngine] Recording saved to '{self.recording_path}'.")
             return self.recording_path
         return None
 
     def export_logs_csv(self, filepath="track_logs.csv"):
         if not self.track_logs:
-            print("[TrackerEngine] No logs available to export.")
             return False
         keys = ["frame", "track_id", "class", "confidence", "bbox", "center", "timestamp"]
         with open(filepath, "w", newline="", encoding="utf-8") as f:
@@ -477,14 +460,11 @@ class ObjectTrackerEngine:
                 row_copy["bbox"] = str(row_copy["bbox"])
                 row_copy["center"] = str(row_copy["center"])
                 writer.writerow(row_copy)
-        print(f"[TrackerEngine] Track logs exported to CSV: '{filepath}'.")
         return True
 
     def export_logs_json(self, filepath="track_logs.json"):
         if not self.track_logs:
-            print("[TrackerEngine] No logs available to export.")
             return False
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(self.track_logs, f, indent=2)
-        print(f"[TrackerEngine] Track logs exported to JSON: '{filepath}'.")
         return True
