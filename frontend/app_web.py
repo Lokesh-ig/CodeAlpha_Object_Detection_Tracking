@@ -171,6 +171,13 @@ def main():
     st.subheader("📋 Active Track Log Table")
     table_placeholder = st.empty()
 
+    # Initialize KPI Default Displays
+    kpi_fps.metric("FPS", "0.0")
+    kpi_lat.metric("LATENCY", "0.0 ms")
+    kpi_active.metric("ACTIVE TRACKS", "0")
+    kpi_unique.metric("TOTAL UNIQUE IDs", str(len(engine.unique_track_ids)))
+    kpi_people.metric("PEOPLE COUNT", "0")
+
     # --------------------------------------------------------------------------
     # STREAM PROCESSING LOOPS
     # --------------------------------------------------------------------------
@@ -182,11 +189,62 @@ def main():
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
             if not cap.isOpened():
-                st.error("✗ Unable to access camera device.")
+                st.error("✗ Unable to access camera device. Ensure no other application (like main.py or app_gui.py) is using the webcam.")
+                st.session_state.webcam_running = False
             else:
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    frame = cv2.flip(frame, 1)
+                try:
+                    while st.session_state.webcam_running:
+                        ret, frame = cap.read()
+                        if not ret or frame is None:
+                            st.warning("Webcam frame capture paused or unavailable.")
+                            time.sleep(0.05)
+                            break
+
+                        frame = cv2.flip(frame, 1)
+
+                        annotated_frame, stats, active_tracks = engine.process_frame(
+                            frame,
+                            conf_threshold=conf_thresh,
+                            iou_threshold=iou_thresh,
+                            show_trails=show_trails,
+                            show_labels=show_labels,
+                            show_boxes=show_boxes,
+                            show_hud=show_hud
+                        )
+
+                        rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                        video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
+
+                        kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
+                        kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
+                        kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
+                        kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
+                        kpi_people.metric("PEOPLE COUNT", stats['person_count'])
+
+                        if active_tracks:
+                            df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
+                            table_placeholder.dataframe(df, use_container_width=True)
+                        else:
+                            table_placeholder.text("No active objects currently tracked.")
+
+                        time.sleep(0.005)
+                finally:
+                    cap.release()
+        else:
+            video_placeholder.info("⏸️ Stream is currently STOPPED. Click '▶️ Start Stream' in the sidebar to start live tracking.")
+
+    elif input_source == "Upload Video File (.mp4, .avi)":
+        uploaded_video = st.sidebar.file_uploader("Choose a video file", type=["mp4", "avi", "mov", "mkv"])
+        if uploaded_video:
+            tfile = tempfile.NamedTemporaryFile(delete=False)
+            tfile.write(uploaded_video.read())
+
+            cap = cv2.VideoCapture(tfile.name)
+            try:
+                while cap.isOpened() and st.session_state.webcam_running:
+                    ret, frame = cap.read()
+                    if not ret or frame is None:
+                        break
 
                     annotated_frame, stats, active_tracks = engine.process_frame(
                         frame,
@@ -210,59 +268,10 @@ def main():
                     if active_tracks:
                         df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
                         table_placeholder.dataframe(df, use_container_width=True)
-                    else:
-                        table_placeholder.text("No active objects currently tracked.")
 
+                    time.sleep(0.005)
+            finally:
                 cap.release()
-
-                # Continuously trigger frame updates when active
-                if st.session_state.webcam_running:
-                    time.sleep(0.01)
-                    st.rerun()
-        else:
-            video_placeholder.info("⏸️ Stream is currently STOPPED. Click '▶️ Start Stream' in the sidebar to start live tracking.")
-            kpi_fps.metric("FPS", "0.0")
-            kpi_lat.metric("LATENCY", "0.0 ms")
-            kpi_active.metric("ACTIVE TRACKS", "0")
-            kpi_unique.metric("TOTAL UNIQUE IDs", str(len(engine.unique_track_ids)))
-            kpi_people.metric("PEOPLE COUNT", "0")
-
-    elif input_source == "Upload Video File (.mp4, .avi)":
-        uploaded_video = st.sidebar.file_uploader("Choose a video file", type=["mp4", "avi", "mov", "mkv"])
-        if uploaded_video:
-            tfile = tempfile.NamedTemporaryFile(delete=False)
-            tfile.write(uploaded_video.read())
-
-            cap = cv2.VideoCapture(tfile.name)
-            while cap.isOpened() and st.session_state.webcam_running:
-                ret, frame = cap.read()
-                if not ret or frame is None:
-                    break
-
-                annotated_frame, stats, active_tracks = engine.process_frame(
-                    frame,
-                    conf_threshold=conf_thresh,
-                    iou_threshold=iou_thresh,
-                    show_trails=show_trails,
-                    show_labels=show_labels,
-                    show_boxes=show_boxes,
-                    show_hud=show_hud
-                )
-
-                rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
-
-                kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
-                kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
-                kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
-                kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
-                kpi_people.metric("PEOPLE COUNT", stats['person_count'])
-
-                if active_tracks:
-                    df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
-                    table_placeholder.dataframe(df, use_container_width=True)
-
-            cap.release()
 
     elif input_source == "Upload Image File (.jpg, .png)":
         uploaded_image = st.sidebar.file_uploader("Choose an image file", type=["jpg", "png", "jpeg"])
