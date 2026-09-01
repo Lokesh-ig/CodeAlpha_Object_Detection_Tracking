@@ -3,9 +3,12 @@ import time
 import os
 import json
 import csv
+import warnings
 from datetime import datetime
 from collections import defaultdict, deque
 import numpy as np
+
+warnings.filterwarnings("ignore")
 
 from ultralytics import YOLO, YOLOWorld
 from deep_sort_realtime.deepsort_tracker import DeepSort
@@ -14,8 +17,8 @@ from deep_sort_realtime.deepsort_tracker import DeepSort
 class ObjectTrackerEngine:
     """
     High-Performance Instant Object Detection & Tracking Engine.
-    Tuned for instant frame-1 detection confirmation, track persistence (no flickering),
-    and open-world universal coverage.
+    Tuned with strict appearance feature matching (max_cosine_distance=0.2) to prevent ID swapping,
+    and optimized for low-latency web & desktop UI rendering.
     """
 
     COLOR_PALETTE = [
@@ -37,9 +40,10 @@ class ObjectTrackerEngine:
         "laptop", "book", "tool", "box", "device", "accessory"
     ]
 
-    def __init__(self, model_path="yolov8s-world.pt", max_age=45, n_init=1, nms_max_overlap=0.7):
-        # max_age=45: Keeps tracking stable even if object moves quickly or flickers
-        # n_init=1: INSTANT TRACKING on the very first frame an object is detected!
+    def __init__(self, model_path="yolov8s-world.pt", max_age=30, n_init=2, nms_max_overlap=0.5):
+        # max_age=30: Keeps tracks alive cleanly
+        # n_init=2: Verifies object over 2 frames to eliminate noise and track ID swapping
+        # nms_max_overlap=0.5: Prevents duplicate overlapping boxes
         self.max_age = max_age
         self.n_init = n_init
         self.nms_max_overlap = nms_max_overlap
@@ -49,11 +53,13 @@ class ObjectTrackerEngine:
         self.custom_prompts = list(self.DEFAULT_WORLD_PROMPTS)
         self.load_model(model_path)
 
-        print("[TrackerEngine] Initializing DeepSORT with Instant Track Confirmation (n_init=1)...")
+        print("[TrackerEngine] Initializing DeepSORT with Anti-ID Swap Matching (max_cosine_distance=0.2)...")
         self.tracker = DeepSort(
             max_age=self.max_age,
             n_init=self.n_init,
-            nms_max_overlap=self.nms_max_overlap
+            nms_max_overlap=self.nms_max_overlap,
+            max_cosine_distance=0.2,
+            nn_budget=100
         )
         print("[TrackerEngine] DeepSORT initialized.")
 
@@ -65,10 +71,10 @@ class ObjectTrackerEngine:
         self.previous_time = time.time()
         self.fps = 0.0
 
-        # Detection Settings (No skipping for max stability)
+        # Performance Settings
         self.last_detections = []
-        self.detection_interval = 1  # Detect on EVERY single frame
-        self.yolo_imgsz = 512        # Optimal resolution for speed & small item detection
+        self.detection_interval = 1
+        self.yolo_imgsz = 416        # Balanced resolution for high speed & accuracy
 
         # Video recording
         self.is_recording = False
@@ -104,7 +110,7 @@ class ObjectTrackerEngine:
             self.yolo_imgsz = 640
             self.detection_interval = 1
         else:  # balanced
-            self.yolo_imgsz = 512
+            self.yolo_imgsz = 416
             self.detection_interval = 1
         print(f"[TrackerEngine] Speed Preset set to '{preset}': imgsz={self.yolo_imgsz}")
 
@@ -129,7 +135,9 @@ class ObjectTrackerEngine:
         self.tracker = DeepSort(
             max_age=self.max_age,
             n_init=self.n_init,
-            nms_max_overlap=self.nms_max_overlap
+            nms_max_overlap=self.nms_max_overlap,
+            max_cosine_distance=0.2,
+            nn_budget=100
         )
         self.track_history.clear()
         self.unique_track_ids.clear()
@@ -141,7 +149,7 @@ class ObjectTrackerEngine:
     def process_frame(
         self,
         frame,
-        conf_threshold=0.25,
+        conf_threshold=0.30,
         iou_threshold=0.45,
         class_filter=None,
         show_trails=True,
@@ -151,7 +159,7 @@ class ObjectTrackerEngine:
         yolo_imgsz=None
     ):
         """
-        Processes a single frame for instant object detection and stable tracking.
+        Processes a single frame for object detection and stable tracking without ID swapping.
         """
         frame_start_time = time.time()
         self.frame_count += 1
@@ -161,7 +169,7 @@ class ObjectTrackerEngine:
         imgsz_to_use = yolo_imgsz if yolo_imgsz is not None else self.yolo_imgsz
 
         # ----------------------------------------------------
-        # 1. YOLO INFERENCE ON EVERY FRAME FOR INSTANT DETECTION
+        # 1. YOLO INFERENCE ON FRAME
         # ----------------------------------------------------
         results = self.model(
             frame,
@@ -209,7 +217,7 @@ class ObjectTrackerEngine:
                     continue
 
         # ----------------------------------------------------
-        # 2. INSTANT DEEP SORT TRACKING
+        # 2. ANTI-ID SWAP DEEP SORT TRACKING
         # ----------------------------------------------------
         try:
             tracks = self.tracker.update_tracks(detections, frame=frame)

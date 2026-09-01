@@ -126,7 +126,7 @@ def main():
             "⚖️ Balanced Mode (416px Recommended)",
             "🎯 Max Accuracy (640px Precision)"
         ],
-        index=1
+        index=0  # Default High FPS for Web
     )
     if "High FPS" in speed_preset:
         engine.set_speed_preset("fast")
@@ -193,6 +193,7 @@ def main():
                 st.session_state.webcam_running = False
             else:
                 try:
+                    frame_idx = 0
                     while st.session_state.webcam_running:
                         ret, frame = cap.read()
                         if not ret or frame is None:
@@ -200,6 +201,7 @@ def main():
                             time.sleep(0.05)
                             break
 
+                        frame_idx += 1
                         frame = cv2.flip(frame, 1)
 
                         annotated_frame, stats, active_tracks = engine.process_frame(
@@ -212,22 +214,27 @@ def main():
                             show_hud=show_hud
                         )
 
-                        rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                        # Resize frame for ultra-fast web browser rendering
+                        web_frame = cv2.resize(annotated_frame, (854, 480))
+                        rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
                         video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
 
+                        # Update KPI Metrics
                         kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
                         kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
                         kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
                         kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
                         kpi_people.metric("PEOPLE COUNT", stats['person_count'])
 
-                        if active_tracks:
-                            df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
-                            table_placeholder.dataframe(df, use_container_width=True)
-                        else:
-                            table_placeholder.text("No active objects currently tracked.")
+                        # Throttle DataFrame UI rendering to every 3 frames for zero lag
+                        if frame_idx % 3 == 0:
+                            if active_tracks:
+                                df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
+                                table_placeholder.dataframe(df, use_container_width=True)
+                            else:
+                                table_placeholder.text("No active objects currently tracked.")
 
-                        time.sleep(0.005)
+                        time.sleep(0.002)
                 finally:
                     cap.release()
         else:
@@ -241,11 +248,13 @@ def main():
 
             cap = cv2.VideoCapture(tfile.name)
             try:
+                frame_idx = 0
                 while cap.isOpened() and st.session_state.webcam_running:
                     ret, frame = cap.read()
                     if not ret or frame is None:
                         break
 
+                    frame_idx += 1
                     annotated_frame, stats, active_tracks = engine.process_frame(
                         frame,
                         conf_threshold=conf_thresh,
@@ -256,7 +265,8 @@ def main():
                         show_hud=show_hud
                     )
 
-                    rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                    web_frame = cv2.resize(annotated_frame, (854, 480))
+                    rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
                     video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
 
                     kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
@@ -265,11 +275,12 @@ def main():
                     kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
                     kpi_people.metric("PEOPLE COUNT", stats['person_count'])
 
-                    if active_tracks:
-                        df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
-                        table_placeholder.dataframe(df, use_container_width=True)
+                    if frame_idx % 3 == 0:
+                        if active_tracks:
+                            df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
+                            table_placeholder.dataframe(df, use_container_width=True)
 
-                    time.sleep(0.005)
+                    time.sleep(0.002)
             finally:
                 cap.release()
 
