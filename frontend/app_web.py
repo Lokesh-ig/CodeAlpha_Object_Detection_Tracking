@@ -34,16 +34,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Dark Theme Styling & Universal Device Responsiveness
+# Custom Dark Theme Styling
 st.markdown("""
     <style>
-    /* Main Background & Text */
     .stApp {
         background-color: #0c0e17;
         color: #e0e6ed;
     }
-
-    /* Metric Cards Styling */
     div[data-testid="stMetricValue"] {
         font-size: 20px;
         font-weight: bold;
@@ -53,7 +50,6 @@ st.markdown("""
         font-size: 11px;
         color: #8898aa;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
     }
     div[data-testid="metric-container"] {
         background-color: #121626;
@@ -61,41 +57,28 @@ st.markdown("""
         border-radius: 8px;
         padding: 8px 12px;
     }
-
-    /* Sidebar Button Styling */
     .stButton>button {
         width: 100%;
         border-radius: 6px;
         font-weight: bold;
         padding: 6px 12px;
         border: 1px solid #28314e;
-        transition: all 0.2s ease-in-out;
     }
     .stButton>button:hover {
         border-color: #00f0ff;
         box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
     }
-
-    /* Video Player Canvas Styling */
     [data-testid="stImage"] img {
         border-radius: 8px;
         border: 2px solid #00f0ff;
         object-fit: contain;
     }
-
-    /* Universal Responsive Layout for Mobile, Tablet, & Desktop */
     @media (max-width: 768px) {
         div[data-testid="column"] {
             width: 50% !important;
             flex: 1 1 45% !important;
             min-width: 130px !important;
             margin-bottom: 8px;
-        }
-        .stApp {
-            padding: 4px !important;
-        }
-        div[data-testid="stMetricValue"] {
-            font-size: 16px;
         }
     }
     </style>
@@ -116,9 +99,15 @@ def main():
     st.title("🛡️ CodeAlpha - Universal Object Detection & Tracking Web App")
     st.caption("Powered by YOLO-World Universal Engine, DeepSORT, and Streamlit")
 
-    # Initialize Session State for Stream Control
+    # Session State Initialization for Camera & Stream Controls
     if "webcam_running" not in st.session_state:
         st.session_state.webcam_running = True
+
+    if "cap" not in st.session_state:
+        st.session_state.cap = None
+
+    if "frame_counter" not in st.session_state:
+        st.session_state.frame_counter = 0
 
     # --------------------------------------------------------------------------
     # SIDEBAR CONTROLS
@@ -131,10 +120,17 @@ def main():
 
     if btn_col1.button("▶️ Start Stream"):
         st.session_state.webcam_running = True
+        if st.session_state.cap is None or not st.session_state.cap.isOpened():
+            st.session_state.cap = cv2.VideoCapture(0)
+            st.session_state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            st.session_state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         st.rerun()
 
     if btn_col2.button("⏹️ Stop Stream"):
         st.session_state.webcam_running = False
+        if st.session_state.cap is not None:
+            st.session_state.cap.release()
+            st.session_state.cap = None
         st.rerun()
 
     # 1. Model Selector
@@ -168,7 +164,7 @@ def main():
             "⚖️ Balanced Mode (416px Recommended)",
             "🎯 Max Accuracy (640px Precision)"
         ],
-        index=0  # Default High FPS for Web Responsiveness
+        index=0
     )
     if "High FPS" in speed_preset:
         engine.set_speed_preset("fast")
@@ -198,7 +194,7 @@ def main():
         st.sidebar.success("Tracker reset!")
 
     # --------------------------------------------------------------------------
-    # MAIN DISPLAY LAYOUT (AUTO-RESPONSIVE)
+    # MAIN DISPLAY LAYOUT
     # --------------------------------------------------------------------------
 
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -213,7 +209,7 @@ def main():
     st.subheader("📋 Active Track Log Table")
     table_placeholder = st.empty()
 
-    # Initialize KPI Default Displays
+    # Default KPI displays
     kpi_fps.metric("FPS", "0.0")
     kpi_lat.metric("LATENCY", "0.0 ms")
     kpi_active.metric("ACTIVE TRACKS", "0")
@@ -226,61 +222,54 @@ def main():
 
     if input_source == "Live Webcam Stream":
         if st.session_state.webcam_running:
-            cap = cv2.VideoCapture(0)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            # Auto-open camera if needed
+            if st.session_state.cap is None or not st.session_state.cap.isOpened():
+                st.session_state.cap = cv2.VideoCapture(0)
+                st.session_state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                st.session_state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-            if not cap.isOpened():
-                st.error("✗ Unable to access camera device. Ensure no other application (like main.py or app_gui.py) is using the webcam.")
-                st.session_state.webcam_running = False
+            cap = st.session_state.cap
+            if cap is not None and cap.isOpened():
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    st.session_state.frame_counter += 1
+                    frame = cv2.flip(frame, 1)
+
+                    annotated_frame, stats, active_tracks = engine.process_frame(
+                        frame,
+                        conf_threshold=conf_thresh,
+                        iou_threshold=iou_thresh,
+                        show_trails=show_trails,
+                        show_labels=show_labels,
+                        show_boxes=show_boxes,
+                        show_hud=show_hud
+                    )
+
+                    web_frame = cv2.resize(annotated_frame, (854, 480))
+                    rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
+                    video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
+
+                    kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
+                    kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
+                    kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
+                    kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
+                    kpi_people.metric("PEOPLE COUNT", stats['person_count'])
+
+                    if st.session_state.frame_counter % 3 == 0:
+                        if active_tracks:
+                            df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
+                            table_placeholder.dataframe(df, use_container_width=True)
+                        else:
+                            table_placeholder.text("No active objects currently tracked.")
+
+                    time.sleep(0.01)
+                    st.rerun()
+                else:
+                    st.warning("⚠️ Frame capture returned empty. Camera may be busy or disconnected.")
             else:
-                try:
-                    frame_idx = 0
-                    while st.session_state.webcam_running:
-                        ret, frame = cap.read()
-                        if not ret or frame is None:
-                            st.warning("Webcam frame capture paused or unavailable.")
-                            time.sleep(0.05)
-                            break
-
-                        frame_idx += 1
-                        frame = cv2.flip(frame, 1)
-
-                        annotated_frame, stats, active_tracks = engine.process_frame(
-                            frame,
-                            conf_threshold=conf_thresh,
-                            iou_threshold=iou_thresh,
-                            show_trails=show_trails,
-                            show_labels=show_labels,
-                            show_boxes=show_boxes,
-                            show_hud=show_hud
-                        )
-
-                        # Resize frame for responsive web rendering
-                        web_frame = cv2.resize(annotated_frame, (854, 480))
-                        rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
-                        video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
-
-                        # Update KPI Metrics Cards
-                        kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
-                        kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
-                        kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
-                        kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
-                        kpi_people.metric("PEOPLE COUNT", stats['person_count'])
-
-                        # Throttle DataFrame UI rendering to every 3 frames for zero lag
-                        if frame_idx % 3 == 0:
-                            if active_tracks:
-                                df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
-                                table_placeholder.dataframe(df, use_container_width=True)
-                            else:
-                                table_placeholder.text("No active objects currently tracked.")
-
-                        time.sleep(0.002)
-                finally:
-                    cap.release()
+                st.error("✗ Unable to access camera device. Ensure no other app is using the camera.")
         else:
-            video_placeholder.info("⏸️ Stream is currently STOPPED. Click '▶️ Start Stream' in the sidebar to start live tracking.")
+            video_placeholder.info("⏸️ Stream is currently STOPPED. Click '▶️ Start Stream' in the sidebar to resume live tracking.")
 
     elif input_source == "Upload Video File (.mp4, .avi)":
         uploaded_video = st.sidebar.file_uploader("Choose a video file", type=["mp4", "avi", "mov", "mkv"])
@@ -322,7 +311,7 @@ def main():
                             df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
                             table_placeholder.dataframe(df, use_container_width=True)
 
-                    time.sleep(0.002)
+                    time.sleep(0.005)
             finally:
                 cap.release()
 
