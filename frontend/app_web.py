@@ -34,7 +34,7 @@ except ImportError:
 # ==============================================================================
 
 st.set_page_config(
-    page_title="CodeAlpha - Universal Object Tracker Web Service",
+    page_title="CodeAlpha - Object Detection & Tracking Web Service",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -88,7 +88,7 @@ def get_tracker_engine(model_name="yolov8s-world.pt"):
 
 
 def main():
-    st.title("🛡️ CodeAlpha - Universal Object Detection & Tracking Web Service")
+    st.title("🛡️ CodeAlpha - Object Detection & Tracking Web Service")
     st.caption("Enterprise AI Vision Dashboard Powered by YOLO & DeepSORT")
 
     if "webcam_running" not in st.session_state:
@@ -123,7 +123,7 @@ def main():
     model_choice = st.sidebar.selectbox(
         "YOLO AI Model Engine",
         [
-            "🌍 YOLO-World Universal (yolov8s-world.pt)",
+            "🌍 YOLO-World (yolov8s-world.pt)",
             "⚡ YOLO11 Nano (yolo11n.pt) [Ultra Fast]",
             "🎯 YOLO11 Small (yolo11s.pt)"
         ],

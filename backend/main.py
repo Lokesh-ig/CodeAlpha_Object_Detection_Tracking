@@ -29,7 +29,7 @@ MODEL_PATH = "yolov8s-world.pt"
 CAMERA_INDEX = 0
 FRAME_WIDTH = 1920
 FRAME_HEIGHT = 1080
-WINDOW_NAME = "CodeAlpha - High-Tech Universal Object Detection & Tracking HUD"
+WINDOW_NAME = "CodeAlpha - High-Tech Object Detection & Tracking HUD"
 
 
 # ==============================================================================

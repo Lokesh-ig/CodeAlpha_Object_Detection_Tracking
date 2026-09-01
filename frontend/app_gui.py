@@ -166,7 +166,7 @@ class VideoThread(QThread):
 class DashboardWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("CodeAlpha - Real-Time Universal Object Detection & Tracking")
+        self.setWindowTitle("CodeAlpha - Real-Time Object Detection & Tracking")
         self.resize(1600, 950)
 
         model_p = "yolov8s-world.pt"
@@ -360,7 +360,7 @@ class DashboardWindow(QMainWindow):
 
         self.model_combo = QComboBox()
         self.model_combo.addItems([
-            "🌍 YOLO-World Universal (yolov8s-world.pt)",
+            "🌍 YOLO-World (yolov8s-world.pt)",
             "⚡ YOLO11 Nano (yolo11n.pt)",
             "🎯 YOLO11 Small (yolo11s.pt)"
         ])

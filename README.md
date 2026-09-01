@@ -1,6 +1,6 @@
-# 🛡️ CodeAlpha Universal Object Detection & Tracking System
+# 🛡️ CodeAlpha Object Detection & Tracking System
 
-A high-performance real-time Object Detection and Tracking system built using **Python**, **Streamlit**, **PyQt6**, **YOLO11**, **YOLO-World Universal**, **DeepSORT**, and **OpenCV**.
+A high-performance real-time Object Detection and Tracking system built using **Python**, **Streamlit**, **PyQt6**, **YOLO11**, **YOLO-World**, **DeepSORT**, and **OpenCV**.
 
 ---
 
@@ -24,17 +24,17 @@ This project provides 3 execution modes:
 - **Browser-Accessible**: Runs in any modern web browser (Chrome, Edge, Safari, Firefox).
 - **Interactive Multi-Source Inputs**: Stream WebRTC live camera, auto-loop demo videos, upload video files (`.mp4`, `.avi`), or process static images (`.jpg`, `.png`).
 - **Live Analytics Metrics**: Real-time KPI cards for FPS, Latency (ms), Active Tracks, Total Unique IDs, and Person Count.
-- **YOLO-World Universal Prompt Tuning**: Type custom open-vocabulary prompts on the fly.
+- **YOLO-World Open-Vocabulary Prompt Tuning**: Type custom open-vocabulary prompts on the fly.
 - **Live Active Track Data Table**: Real-time pandas DataFrame showing track IDs, classes, confidence scores, and center coordinates.
 - **Maximize Viewport Theater Mode**: Full-screen video container expansion.
 
 ---
 
-### 🌍 YOLO-World Universal Open-Vocabulary Engine (`yolov8s-world.pt`)
+### 🌍 YOLO-World Open-Vocabulary Engine (`yolov8s-world.pt`)
 - **Detect & Track Anything**: Detects and tracks **ANY object** in real-time without custom training!
 - **Dynamic Text Prompts**: Easily specify custom text prompts in the UI (e.g. `person, object, item, gadget, card, hand, toy, bottle, phone, bag, tool`).
 - **AI Model Engine Switcher**: Toggle seamlessly between:
-  - 🌍 `YOLO-World Universal (yolov8s-world.pt)` – Open-vocabulary universal object detection.
+  - 🌍 `YOLO-World (yolov8s-world.pt)` – Open-vocabulary object detection.
   - ⚡ `YOLO11 Nano (yolo11n.pt)` – Ultra-fast 80-class everyday tracker.
   - 🎯 `YOLO11 Small (yolo11s.pt)` – High-accuracy 80-class tracker.
 
@@ -46,7 +46,7 @@ This project provides 3 execution modes:
 Input (WebRTC Camera / Demo Video / Uploaded File)
            │
            ▼
- YOLO11 / YOLO-World Universal Engine
+     YOLO11 / YOLO-World Engine
  (Text Prompts: person, object, item, gadget...)
            │
            ▼
