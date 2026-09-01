@@ -27,7 +27,7 @@ except ImportError:
 # ==============================================================================
 
 st.set_page_config(
-    page_title="CodeAlpha - Universal Object Tracker Web App",
+    page_title="CodeAlpha - Universal Object Tracker Web Service",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -76,13 +76,13 @@ st.markdown("""
 # ==============================================================================
 
 @st.cache_resource
-def get_tracker_engine(model_name="yolov8s-world.pt"):
+def get_tracker_engine(model_name="yolo11n.pt"):
     return ObjectTrackerEngine(model_name)
 
 
 def main():
     st.title("🛡️ CodeAlpha - Universal Object Detection & Tracking Web Service")
-    st.caption("Enterprise AI Vision Dashboard Powered by YOLO-World & DeepSORT")
+    st.caption("Enterprise AI Vision Dashboard Powered by YOLO & DeepSORT")
 
     if "webcam_running" not in st.session_state:
         st.session_state.webcam_running = True
@@ -116,13 +116,14 @@ def main():
     model_choice = st.sidebar.selectbox(
         "YOLO AI Model Engine",
         [
-            "🌍 YOLO-World Universal (yolov8s-world.pt)",
-            "⚡ YOLO11 Nano (yolo11n.pt)",
-            "🎯 YOLO11 Small (yolo11s.pt)"
-        ]
+            "⚡ YOLO11 Nano (yolo11n.pt) [Ultra Fast & Lightweight]",
+            "🎯 YOLO11 Small (yolo11s.pt)",
+            "🌍 YOLO-World Universal (yolov8s-world.pt)"
+        ],
+        index=0
     )
 
-    model_key = "yolov8s-world.pt" if "world" in model_choice else ("yolo11n.pt" if "11n" in model_choice else "yolo11s.pt")
+    model_key = "yolov8s-world.pt" if "world" in model_choice else ("yolo11s.pt" if "11s" in model_choice else "yolo11n.pt")
     engine = get_tracker_engine(model_key)
 
     if "world" in model_choice:
@@ -172,10 +173,9 @@ def main():
         st.sidebar.success("Tracker reset!")
 
     # --------------------------------------------------------------------------
-    # MAIN DISPLAY LAYOUT (PROMINENT VIEWPORT AT TOP)
+    # MAIN DISPLAY LAYOUT
     # --------------------------------------------------------------------------
 
-    # Live Metrics Header
     col1, col2, col3, col4, col5 = st.columns(5)
     kpi_fps = col1.empty()
     kpi_lat = col2.empty()
@@ -189,7 +189,6 @@ def main():
     kpi_unique.metric("TOTAL UNIQUE IDs", str(len(engine.unique_track_ids)))
     kpi_people.metric("PEOPLE COUNT", "0")
 
-    # Main Video Viewport Container (Located ABOVE Table)
     video_container = st.container()
 
     st.subheader("📋 Active Track Log Table")
