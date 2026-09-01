@@ -42,7 +42,7 @@ st.markdown("""
         color: #e0e6ed;
     }
     div[data-testid="stMetricValue"] {
-        font-size: 24px;
+        font-size: 22px;
         font-weight: bold;
         color: #00f0ff;
     }
@@ -52,15 +52,9 @@ st.markdown("""
         text-transform: uppercase;
     }
     .stButton>button {
-        background-color: #00d2ff;
-        color: #050b14;
-        font-weight: bold;
+        width: 100%;
         border-radius: 6px;
-        border: none;
-    }
-    .stButton>button:hover {
-        background-color: #00f0ff;
-        box-shadow: 0 0 10px #00f0ff;
+        font-weight: bold;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -80,10 +74,26 @@ def main():
     st.title("🛡️ CodeAlpha - Universal Object Detection & Tracking Web App")
     st.caption("Powered by YOLO-World Universal Engine, DeepSORT, and Streamlit")
 
+    # Initialize Session State for Stream Control
+    if "webcam_running" not in st.session_state:
+        st.session_state.webcam_running = True
+
     # --------------------------------------------------------------------------
     # SIDEBAR CONTROLS
     # --------------------------------------------------------------------------
     st.sidebar.header("⚡ CONTROL CENTER")
+
+    # 0. Stream Control Buttons
+    st.sidebar.subheader("🎥 Stream Controls")
+    btn_col1, btn_col2 = st.sidebar.columns(2)
+
+    if btn_col1.button("▶️ Start Stream"):
+        st.session_state.webcam_running = True
+        st.rerun()
+
+    if btn_col2.button("⏹️ Stop Stream"):
+        st.session_state.webcam_running = False
+        st.rerun()
 
     # 1. Model Selector
     model_choice = st.sidebar.selectbox(
@@ -141,11 +151,14 @@ def main():
     show_labels = st.sidebar.checkbox("Class Badges 🏷️", value=True)
     show_hud = st.sidebar.checkbox("HUD Stats Panel 📊", value=True)
 
+    if st.sidebar.button("🔄 Reset Tracker"):
+        engine.reset_tracker()
+        st.sidebar.success("Tracker reset!")
+
     # --------------------------------------------------------------------------
     # MAIN DISPLAY LAYOUT
     # --------------------------------------------------------------------------
 
-    # Real-Time KPI Cards Layout
     col1, col2, col3, col4, col5 = st.columns(5)
     kpi_fps = col1.empty()
     kpi_lat = col2.empty()
@@ -153,10 +166,8 @@ def main():
     kpi_unique = col4.empty()
     kpi_people = col5.empty()
 
-    # Video Feed Canvas
     video_placeholder = st.empty()
 
-    # Track Log Table
     st.subheader("📋 Active Track Log Table")
     table_placeholder = st.empty()
 
@@ -165,50 +176,56 @@ def main():
     # --------------------------------------------------------------------------
 
     if input_source == "Live Webcam Stream":
-        run_webcam = st.sidebar.checkbox("▶️ Start Live Stream", value=True)
-
-        if run_webcam:
+        if st.session_state.webcam_running:
             cap = cv2.VideoCapture(0)
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-            while run_webcam:
+            if not cap.isOpened():
+                st.error("✗ Unable to access camera device.")
+            else:
                 ret, frame = cap.read()
-                if not ret or frame is None:
-                    st.warning("Unable to access live webcam feed.")
-                    break
+                if ret and frame is not None:
+                    frame = cv2.flip(frame, 1)
 
-                frame = cv2.flip(frame, 1)
+                    annotated_frame, stats, active_tracks = engine.process_frame(
+                        frame,
+                        conf_threshold=conf_thresh,
+                        iou_threshold=iou_thresh,
+                        show_trails=show_trails,
+                        show_labels=show_labels,
+                        show_boxes=show_boxes,
+                        show_hud=show_hud
+                    )
 
-                annotated_frame, stats, active_tracks = engine.process_frame(
-                    frame,
-                    conf_threshold=conf_thresh,
-                    iou_threshold=iou_thresh,
-                    show_trails=show_trails,
-                    show_labels=show_labels,
-                    show_boxes=show_boxes,
-                    show_hud=show_hud
-                )
+                    rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                    video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
 
-                # Convert BGR to RGB for Streamlit rendering
-                rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
+                    kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
+                    kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
+                    kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
+                    kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
+                    kpi_people.metric("PEOPLE COUNT", stats['person_count'])
 
-                # Update KPI Metrics Cards
-                kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
-                kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
-                kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
-                kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
-                kpi_people.metric("PEOPLE COUNT", stats['person_count'])
+                    if active_tracks:
+                        df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
+                        table_placeholder.dataframe(df, use_container_width=True)
+                    else:
+                        table_placeholder.text("No active objects currently tracked.")
 
-                # Update Active Track Log Table
-                if active_tracks:
-                    df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
-                    table_placeholder.dataframe(df, use_container_width=True)
-                else:
-                    table_placeholder.text("No active objects currently tracked.")
+                cap.release()
 
-            cap.release()
+                # Continuously trigger frame updates when active
+                if st.session_state.webcam_running:
+                    time.sleep(0.01)
+                    st.rerun()
+        else:
+            video_placeholder.info("⏸️ Stream is currently STOPPED. Click '▶️ Start Stream' in the sidebar to start live tracking.")
+            kpi_fps.metric("FPS", "0.0")
+            kpi_lat.metric("LATENCY", "0.0 ms")
+            kpi_active.metric("ACTIVE TRACKS", "0")
+            kpi_unique.metric("TOTAL UNIQUE IDs", str(len(engine.unique_track_ids)))
+            kpi_people.metric("PEOPLE COUNT", "0")
 
     elif input_source == "Upload Video File (.mp4, .avi)":
         uploaded_video = st.sidebar.file_uploader("Choose a video file", type=["mp4", "avi", "mov", "mkv"])
@@ -217,7 +234,7 @@ def main():
             tfile.write(uploaded_video.read())
 
             cap = cv2.VideoCapture(tfile.name)
-            while cap.isOpened():
+            while cap.isOpened() and st.session_state.webcam_running:
                 ret, frame = cap.read()
                 if not ret or frame is None:
                     break
@@ -244,6 +261,7 @@ def main():
                 if active_tracks:
                     df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
                     table_placeholder.dataframe(df, use_container_width=True)
+
             cap.release()
 
     elif input_source == "Upload Image File (.jpg, .png)":
