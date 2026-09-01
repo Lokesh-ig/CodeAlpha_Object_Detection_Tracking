@@ -1,16 +1,28 @@
-# 🛡️ CodeAlpha Universal Object Detection & Tracking Dashboard
+# 🛡️ CodeAlpha Universal Object Detection & Tracking System
 
-A high-performance real-time Object Detection and Tracking system built using **Python**, **PyQt6**, **YOLO11**, **YOLO-World Universal**, **DeepSORT**, and **OpenCV**.
+A high-performance real-time Object Detection and Tracking system built using **Python**, **Streamlit**, **PyQt6**, **YOLO11**, **YOLO-World Universal**, **DeepSORT**, and **OpenCV**.
 
-This project provides both a **Modern Desktop GUI Dashboard** (`app_gui.py`) with a **YOLO-World Universal Open-Vocabulary Engine** and a **High-Tech OpenCV HUD CLI Mode** (`main.py`) for live webcam streams, video files, and static image analysis.
+This project provides 3 execution modes:
+1. **🌐 Web App Dashboard (`app_web.py`)**: Browser-accessible UI built with Streamlit.
+2. **🖥️ Modern Desktop GUI Dashboard (`app_gui.py`)**: High-performance desktop application built with PyQt6.
+3. **🎮 High-Tech OpenCV HUD CLI Mode (`main.py`)**: Fast OpenCV window with keyboard shortcuts.
 
 ---
 
 ## 🌟 Key Features
 
-### 🌍 YOLO-World Universal Open-Vocabulary Tracker (`yolov8s-world.pt`)
+### 🌐 Streamlit Web App Dashboard (`app_web.py`)
+- **Browser-Accessible**: Runs in any modern web browser (Chrome, Edge, Safari, Firefox).
+- **Interactive Multi-Source Inputs**: Stream live webcam, upload video files (`.mp4`, `.avi`), or process static images (`.jpg`, `.png`).
+- **Live Analytics Metrics**: Real-time KPI cards for FPS, Latency (ms), Active Tracks, Total Unique IDs, and Person Count.
+- **YOLO-World Universal Prompt Tuning**: Type custom open-vocabulary prompts on the fly.
+- **Live Active Track Data Table**: Real-time pandas DataFrame showing track IDs, classes, confidence scores, and center coordinates.
+
+---
+
+### 🌍 YOLO-World Universal Open-Vocabulary Engine (`yolov8s-world.pt`)
 - **Detect & Track Anything**: Detects and tracks **ANY object** in real-time without custom training!
-- **Dynamic Text Prompts**: Easily specify custom text prompts in the GUI (e.g. `person, object, item, gadget, card, hand, toy, bottle, phone, bag, tool`).
+- **Dynamic Text Prompts**: Easily specify custom text prompts in the UI (e.g. `person, object, item, gadget, card, hand, toy, bottle, phone, bag, tool`).
 - **AI Model Engine Switcher**: Toggle seamlessly between:
   - 🌍 `YOLO-World Universal (yolov8s-world.pt)` – Open-vocabulary universal object detection.
   - ⚡ `YOLO11 Nano (yolo11n.pt)` – Fast 80-class everyday tracker.
@@ -18,46 +30,10 @@ This project provides both a **Modern Desktop GUI Dashboard** (`app_gui.py`) wit
 
 ---
 
-### 🖥️ Modern Desktop GUI Dashboard (`app_gui.py`)
-- **Maximized Detection Viewport**: Click `📐 MAXIMIZE DETECTION AREA` to hide sidebars and expand the video feed to fill **100% of the screen**.
-- **Multi-Source Input Support**: Switch between **Live Webcams**, **Video Files** (`.mp4`, `.avi`, `.mkv`), or **Static Images** (`.jpg`, `.png`).
-- **Real-Time Detection Tuning**: Live sliders for **Confidence Threshold** ($0.05 - 0.95$) and **IoU NMS Threshold**.
-- **Visual Overlays**:
-  - 🌀 **Motion Trajectory Trails**: Color-coded breadcrumb lines showing object motion paths over time.
-  - 📦 **Bounding Boxes & Corner Accents**: High-contrast bounding boxes with futuristic corner targeting marks.
-  - 🏷️ **Class Badges & ID Tags**: Solid badges displaying Object Class, Tracking ID, and Confidence %.
-  - 📊 **Translucent HUD Overlay**: Live overlay stats panel directly on the video feed.
-- **Analytics Dashboard & Active Track Log**:
-  - Real-time KPI metrics cards for **FPS**, **Latency (ms)**, **Active Tracks**, **Total Unique IDs**, **Person Count**, and **Vehicle / Object Counts**.
-  - Live updating table displaying active object IDs, classes, confidence scores, and center $(X,Y)$ coordinates.
-- **Tools & Actions**:
-  - 📸 **Snapshot Generator**: Save high-resolution snapshots to `snapshots/`.
-  - 🎥 **Stream Recorder**: One-click MP4 video stream recording to `recordings/`.
-  - 🔄 **Tracker Reset**: Clear tracking history and reset DeepSORT IDs.
-  - 💾 **Data Export**: Export complete session tracking logs to **CSV** or **JSON** files in `exports/`.
-
----
-
-### 🎮 High-Tech HUD CLI Mode (`main.py`)
-A fast OpenCV window HUD interface for lightweight monitoring with full keyboard shortcuts:
-
-| Shortcut Key | Action |
-|:------------:|:-------|
-| `[SPACE]` | Pause / Resume live video stream |
-| `[S]` | Take high-resolution snapshot |
-| `[R]` | Start / Stop video stream recording (MP4) |
-| `[T]` | Toggle trajectory motion trails |
-| `[H]` | Toggle translucent HUD stats panel |
-| `[C]` | Reset tracker state & clear ID history |
-| `[E]` | Export tracking log to CSV and JSON |
-| `[Q]` / `[ESC]` | Quit application |
-
----
-
 ## 🛠️ System Architecture
 
 ```text
-Input (Webcam / Video / Image)
+Input (Webcam / Video File / Image)
            │
            ▼
  YOLO11 / YOLO-World Universal Engine
@@ -72,10 +48,10 @@ Input (Webcam / Video / Image)
            ▼
     Render Overlay ──► Trajectories + Boxes + Badges + HUD Panel
            │
-           ├─────────────────────────┐
-           ▼                         ▼
-   PyQt6 GUI Window           OpenCV HUD Window
-  (app_gui.py)                   (main.py)
+           ├─────────────────────────┼─────────────────────────┐
+           ▼                         ▼                         ▼
+   Streamlit Web App         PyQt6 Desktop App         OpenCV HUD Window
+     (app_web.py)               (app_gui.py)               (main.py)
 ```
 
 ---
@@ -91,12 +67,17 @@ Input (Webcam / Video / Image)
 pip install -r requirements.txt
 ```
 
-### 2. Launching the GUI Dashboard (with YOLO-World)
+### 2. Launching the Web App Dashboard 🌐
+```bash
+streamlit run app_web.py
+```
+
+### 3. Launching the Desktop GUI Application 🖥️
 ```bash
 python app_gui.py
 ```
 
-### 3. Launching the OpenCV HUD Mode
+### 4. Launching the OpenCV HUD CLI Mode 🎮
 ```bash
 python main.py
 ```
@@ -106,4 +87,4 @@ python main.py
 ## 📜 License & Credits
 
 Developed for **CodeAlpha** Object Detection & Tracking.  
-Powered by [Ultralytics YOLO-World](https://docs.ultralytics.com/models/yolo-world/), [DeepSORT Realtime](https://github.com/levan92/deep_sort_realtime), OpenCV, and PyQt6.
+Powered by [Streamlit](https://streamlit.io/), [Ultralytics YOLO-World](https://docs.ultralytics.com/models/yolo-world/), [DeepSORT Realtime](https://github.com/levan92/deep_sort_realtime), OpenCV, and PyQt6.

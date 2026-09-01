@@ -4,4 +4,7 @@ deep-sort-realtime
 PyQt6
 customtkinter
 Pillow
+streamlit
+plotly
+pandas
 setuptools<82
