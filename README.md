@@ -1,27 +1,37 @@
-# 🛡️ CodeAlpha Object Detection & Tracking Dashboard
+# 🛡️ CodeAlpha Universal Object Detection & Tracking Dashboard
 
-A high-performance real-time Object Detection and Tracking system built using **Python**, **PyQt6**, **YOLO11**, **DeepSORT**, and **OpenCV**.
+A high-performance real-time Object Detection and Tracking system built using **Python**, **PyQt6**, **YOLO11**, **YOLO-World Universal**, **DeepSORT**, and **OpenCV**.
 
-This project provides both a **Modern Desktop GUI Dashboard** (`app_gui.py`) and a **High-Tech OpenCV HUD CLI Mode** (`main.py`) for live webcam streams, video files, and static image analysis.
+This project provides both a **Modern Desktop GUI Dashboard** (`app_gui.py`) with a **YOLO-World Universal Open-Vocabulary Engine** and a **High-Tech OpenCV HUD CLI Mode** (`main.py`) for live webcam streams, video files, and static image analysis.
 
 ---
 
 ## 🌟 Key Features
 
+### 🌍 YOLO-World Universal Open-Vocabulary Tracker (`yolov8s-world.pt`)
+- **Detect & Track Anything**: Detects and tracks **ANY object** in real-time without custom training!
+- **Dynamic Text Prompts**: Easily specify custom text prompts in the GUI (e.g. `person, object, item, gadget, card, hand, toy, bottle, phone, bag, tool`).
+- **AI Model Engine Switcher**: Toggle seamlessly between:
+  - 🌍 `YOLO-World Universal (yolov8s-world.pt)` – Open-vocabulary universal object detection.
+  - ⚡ `YOLO11 Nano (yolo11n.pt)` – Fast 80-class everyday tracker.
+  - 🎯 `YOLO11 Small (yolo11s.pt)` – High-accuracy 80-class tracker.
+
+---
+
 ### 🖥️ Modern Desktop GUI Dashboard (`app_gui.py`)
-- **Dark Mode Modern Aesthetic**: Clean, responsive layout designed with high-contrast accent highlights.
+- **Maximized Detection Viewport**: Click `📐 MAXIMIZE DETECTION AREA` to hide sidebars and expand the video feed to fill **100% of the screen**.
 - **Multi-Source Input Support**: Switch between **Live Webcams**, **Video Files** (`.mp4`, `.avi`, `.mkv`), or **Static Images** (`.jpg`, `.png`).
-- **Real-Time Detection & Tracking Tuning**: Live sliders for **Confidence Threshold** ($0.05 - 0.95$) and **IoU NMS Threshold**.
-- **Class Filtering**: Select specific object classes (e.g., *Person*, *Car*, *Cell Phone*, *Bottle*, *Cup*, *Chair*, *Laptop*) or process *All Classes*.
-- **Visual Customization**:
+- **Real-Time Detection Tuning**: Live sliders for **Confidence Threshold** ($0.05 - 0.95$) and **IoU NMS Threshold**.
+- **Visual Overlays**:
   - 🌀 **Motion Trajectory Trails**: Color-coded breadcrumb lines showing object motion paths over time.
   - 📦 **Bounding Boxes & Corner Accents**: High-contrast bounding boxes with futuristic corner targeting marks.
   - 🏷️ **Class Badges & ID Tags**: Solid badges displaying Object Class, Tracking ID, and Confidence %.
-  - 📊 **Translucent HUD Overlay**: Toggle live overlay stats directly on the video feed.
-- **Analytics Dashboard**: Real-time KPI metrics cards for **FPS**, **Latency (ms)**, **Active Tracks**, **Total Unique IDs Assigned**, **Person Count**, and **Vehicle / Object Counts**.
-- **Live Track Table**: Auto-updating table displaying active object IDs, classes, confidence scores, and center $(X,Y)$ coordinates.
+  - 📊 **Translucent HUD Overlay**: Live overlay stats panel directly on the video feed.
+- **Analytics Dashboard & Active Track Log**:
+  - Real-time KPI metrics cards for **FPS**, **Latency (ms)**, **Active Tracks**, **Total Unique IDs**, **Person Count**, and **Vehicle / Object Counts**.
+  - Live updating table displaying active object IDs, classes, confidence scores, and center $(X,Y)$ coordinates.
 - **Tools & Actions**:
-  - 📸 **Snapshot Generator**: Save instant high-resolution snapshots to `snapshots/`.
+  - 📸 **Snapshot Generator**: Save high-resolution snapshots to `snapshots/`.
   - 🎥 **Stream Recorder**: One-click MP4 video stream recording to `recordings/`.
   - 🔄 **Tracker Reset**: Clear tracking history and reset DeepSORT IDs.
   - 💾 **Data Export**: Export complete session tracking logs to **CSV** or **JSON** files in `exports/`.
@@ -50,7 +60,8 @@ A fast OpenCV window HUD interface for lightweight monitoring with full keyboard
 Input (Webcam / Video / Image)
            │
            ▼
- YOLO11 Object Detection
+ YOLO11 / YOLO-World Universal Engine
+ (Text Prompts: person, object, item, gadget...)
            │
            ▼
  Confidence & Class Filtering
@@ -71,48 +82,23 @@ Input (Webcam / Video / Image)
 
 ## 🚀 Getting Started
 
-### 1. Prerequisites
-Python 3.10+ installed.
-
-### 2. Environment Setup & Installation
-Activate the virtual environment and install the required dependencies:
-
+### 1. Environment Setup & Installation
 ```bash
-# Windows
+# Activate virtual environment
 .\venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Launching the GUI Dashboard
-To open the modern Desktop GUI application:
-
+### 2. Launching the GUI Dashboard (with YOLO-World)
 ```bash
 python app_gui.py
 ```
 
-### 4. Launching the OpenCV HUD CLI Mode
-To run the lightweight OpenCV HUD window:
-
+### 3. Launching the OpenCV HUD Mode
 ```bash
 python main.py
-```
-
----
-
-## 📁 Project Structure
-
-```
-CodeAlpha_Object_Detection_Tracking/
-├── app_gui.py              # Main Desktop GUI Application (PyQt6)
-├── main.py                 # OpenCV HUD CLI Entrypoint
-├── tracker_engine.py      # Core Detection & Tracking Engine (YOLO11 + DeepSORT)
-├── yolo11n.pt             # Pretrained YOLO11 Model Weights
-├── requirements.txt        # Python Dependencies
-├── snapshots/             # Generated high-resolution snapshots
-├── recordings/            # Recorded MP4 video streams
-└── exports/               # Exported CSV / JSON track logs
 ```
 
 ---
@@ -120,4 +106,4 @@ CodeAlpha_Object_Detection_Tracking/
 ## 📜 License & Credits
 
 Developed for **CodeAlpha** Object Detection & Tracking.  
-Powered by [Ultralytics YOLO](https://github.com/ultralytics/ultralytics), [DeepSORT Realtime](https://github.com/levan92/deep_sort_realtime), OpenCV, and PyQt6.
+Powered by [Ultralytics YOLO-World](https://docs.ultralytics.com/models/yolo-world/), [DeepSORT Realtime](https://github.com/levan92/deep_sort_realtime), OpenCV, and PyQt6.

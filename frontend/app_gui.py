@@ -5,7 +5,6 @@ import time
 import json
 from datetime import datetime
 
-# Adjust Python path to find backend module if needed
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
 if parent_dir not in sys.path:
@@ -13,9 +12,9 @@ if parent_dir not in sys.path:
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QSlider, QCheckBox, QComboBox, QTableWidget,
-    QTableWidgetItem, QFileDialog, QMessageBox, QFrame, QHeaderView,
-    QGroupBox, QSizePolicy, QToolBar
+    QLabel, QPushButton, QSlider, QCheckBox, QComboBox, QLineEdit,
+    QTableWidget, QTableWidgetItem, QFileDialog, QMessageBox, QFrame,
+    QHeaderView, QGroupBox, QSizePolicy
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont
@@ -38,12 +37,11 @@ class VideoThread(QThread):
         self.engine = engine
         self.running = False
         self.paused = False
-        self.source_type = "webcam"  # webcam, video_file, image
+        self.source_type = "webcam"
         self.source_path = 0
         self.cap = None
 
-        # Settings
-        self.conf_threshold = 0.50
+        self.conf_threshold = 0.35
         self.iou_threshold = 0.45
         self.class_filter = []
         self.show_trails = True
@@ -87,11 +85,10 @@ class VideoThread(QThread):
             self.running = False
             return
 
-        # Webcam or Video File
         self.cap = cv2.VideoCapture(self.source_path)
         if self.source_type == "webcam":
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
             self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
 
         while self.running:
@@ -123,7 +120,7 @@ class VideoThread(QThread):
             )
 
             self.change_pixmap_signal.emit(annotated_frame, stats, active_tracks)
-            self.msleep(10)
+            self.msleep(5)
 
         if self.cap is not None:
             self.cap.release()
@@ -135,37 +132,30 @@ class VideoThread(QThread):
 
 
 # ==============================================================================
-# MAIN GUI WINDOW (EXPANDED DETECTION VIEWPORT MODE)
+# MAIN GUI WINDOW (WITH SPEED & PERFORMANCE MODES)
 # ==============================================================================
 
 class DashboardWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("CodeAlpha - Real-Time Object Detection & Tracking Dashboard")
+        self.setWindowTitle("CodeAlpha - Real-Time Universal Object Detection & Tracking")
         self.resize(1600, 950)
 
-        # Model weights path resolution
-        model_p = "yolo11n.pt"
-        if not os.path.exists(model_p) and os.path.exists(os.path.join(parent_dir, "yolo11n.pt")):
-            model_p = os.path.join(parent_dir, "yolo11n.pt")
-        elif not os.path.exists(model_p) and os.path.exists(os.path.join("backend", "yolo11n.pt")):
-            model_p = os.path.join("backend", "yolo11n.pt")
-
+        # Default model: YOLO-World
+        model_p = "yolov8s-world.pt"
         self.engine = ObjectTrackerEngine(model_p)
         self.thread = VideoThread(self.engine)
         self.thread.change_pixmap_signal.connect(self.update_image_and_stats)
 
-        # UI state
         self.current_frame = None
         self.sidebars_visible = True
-        self.stretch_mode = False  # False: Keep Aspect, True: Fill Canvas
+        self.stretch_mode = False
 
         self.apply_dark_theme()
         self.init_ui()
         self.start_stream()
 
     def apply_dark_theme(self):
-        """Applies high-tech dark mode theme."""
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #0c0e17;
@@ -235,12 +225,15 @@ class DashboardWindow(QMainWindow):
                 background-color: #00f0ff;
                 color: #0c0e17;
             }
-            QComboBox {
+            QComboBox, QLineEdit {
                 background-color: #161b2e;
                 border: 1px solid #28314e;
                 border-radius: 5px;
-                padding: 4px 8px;
+                padding: 5px 8px;
                 color: #ffffff;
+            }
+            QLineEdit:focus {
+                border-color: #00f0ff;
             }
             QSlider::groove:horizontal {
                 height: 6px;
@@ -312,20 +305,61 @@ class DashboardWindow(QMainWindow):
         main_layout.setSpacing(6)
 
         # ----------------------------------------------------------------------
-        # LEFT CONTROL SIDEBAR (COMPACT 260px)
+        # LEFT CONTROL SIDEBAR
         # ----------------------------------------------------------------------
         self.left_panel = QWidget()
         left_layout = QVBoxLayout(self.left_panel)
         left_layout.setContentsMargins(4, 4, 4, 4)
         left_layout.setSpacing(6)
-        self.left_panel.setFixedWidth(260)
+        self.left_panel.setFixedWidth(270)
 
         header = QLabel("⚡ CODEALPHA TRACKER")
         header.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         header.setStyleSheet("color: #00f0ff;")
         left_layout.addWidget(header)
 
-        # 1. Source Controls
+        # 0. AI Model Selector
+        model_group = QGroupBox("YOLO AI MODEL ENGINE")
+        mg_layout = QVBoxLayout(model_group)
+        mg_layout.setContentsMargins(6, 6, 6, 6)
+
+        self.model_combo = QComboBox()
+        self.model_combo.addItems([
+            "🌍 YOLO-World Universal (yolov8s-world.pt)",
+            "⚡ YOLO11 Nano (yolo11n.pt)",
+            "🎯 YOLO11 Small (yolo11s.pt)"
+        ])
+        self.model_combo.currentIndexChanged.connect(self.on_model_changed)
+        mg_layout.addWidget(self.model_combo)
+
+        self.lbl_prompts = QLabel("World Detection Prompts:")
+        mg_layout.addWidget(self.lbl_prompts)
+        self.txt_prompts = QLineEdit()
+        self.txt_prompts.setText("person, object, item, gadget, bottle, phone, card, toy, hand, bag")
+        self.txt_prompts.setPlaceholderText("Comma separated e.g. person, item, tool")
+        self.txt_prompts.editingFinished.connect(self.on_prompts_updated)
+        mg_layout.addWidget(self.txt_prompts)
+
+        left_layout.addWidget(model_group)
+
+        # 1. Performance / Speed Preset Group
+        speed_group = QGroupBox("SPEED & PERFORMANCE MODE")
+        sp_layout = QVBoxLayout(speed_group)
+        sp_layout.setContentsMargins(6, 6, 6, 6)
+
+        self.speed_combo = QComboBox()
+        self.speed_combo.addItems([
+            "⚡ High FPS Mode (320px Fast)",
+            "⚖️ Balanced Mode (416px Recommended)",
+            "🎯 Max Accuracy (640px Precision)"
+        ])
+        self.speed_combo.setCurrentIndex(1)  # Default Balanced
+        self.speed_combo.currentIndexChanged.connect(self.on_speed_changed)
+        sp_layout.addWidget(self.speed_combo)
+
+        left_layout.addWidget(speed_group)
+
+        # 2. Source Controls
         source_group = QGroupBox("INPUT SOURCE")
         sg_layout = QVBoxLayout(source_group)
         sg_layout.setContentsMargins(6, 6, 6, 6)
@@ -335,16 +369,16 @@ class DashboardWindow(QMainWindow):
         sg_layout.addWidget(self.source_combo)
         left_layout.addWidget(source_group)
 
-        # 2. Detection Tuning
+        # 3. Detection Tuning
         tune_group = QGroupBox("DETECTION TUNING")
         tg_layout = QVBoxLayout(tune_group)
         tg_layout.setContentsMargins(6, 6, 6, 6)
 
-        self.conf_label = QLabel("Confidence: 0.50")
+        self.conf_label = QLabel("Confidence: 0.35")
         tg_layout.addWidget(self.conf_label)
         self.conf_slider = QSlider(Qt.Orientation.Horizontal)
         self.conf_slider.setRange(5, 95)
-        self.conf_slider.setValue(50)
+        self.conf_slider.setValue(35)
         self.conf_slider.valueChanged.connect(self.on_settings_changed)
         tg_layout.addWidget(self.conf_slider)
 
@@ -364,7 +398,7 @@ class DashboardWindow(QMainWindow):
 
         left_layout.addWidget(tune_group)
 
-        # 3. Visual Toggles
+        # 4. Visual Toggles
         vis_group = QGroupBox("VISUAL OVERLAYS")
         vg_layout = QVBoxLayout(vis_group)
         vg_layout.setContentsMargins(6, 6, 6, 6)
@@ -391,7 +425,7 @@ class DashboardWindow(QMainWindow):
 
         left_layout.addWidget(vis_group)
 
-        # 4. Action Buttons
+        # 5. Action Buttons
         act_group = QGroupBox("ACTIONS")
         ag_layout = QVBoxLayout(act_group)
         ag_layout.setContentsMargins(6, 6, 6, 6)
@@ -422,37 +456,33 @@ class DashboardWindow(QMainWindow):
         left_layout.addStretch()
 
         # ----------------------------------------------------------------------
-        # CENTER LARGE DETECTION VIEWPORT (EXPANDING)
+        # CENTER LARGE DETECTION VIEWPORT
         # ----------------------------------------------------------------------
         center_panel = QWidget()
         center_layout = QVBoxLayout(center_panel)
         center_layout.setContentsMargins(0, 0, 0, 0)
         center_layout.setSpacing(4)
 
-        # Viewport Header Toolbar
         top_bar = QHBoxLayout()
         top_bar.setContentsMargins(4, 2, 4, 2)
 
-        self.status_bar_label = QLabel("Stream Active: Live Webcam (Camera 0)")
+        self.status_bar_label = QLabel("Stream Active: YOLO-World Engine @ Camera 0")
         self.status_bar_label.setStyleSheet("color: #00f0ff; font-weight: bold;")
         top_bar.addWidget(self.status_bar_label)
         top_bar.addStretch()
 
-        # Maximize Viewport Button
         self.btn_max_viewport = QPushButton("📐 MAXIMIZE DETECTION AREA")
         self.btn_max_viewport.setObjectName("maxViewportButton")
         self.btn_max_viewport.clicked.connect(self.toggle_max_viewport)
         top_bar.addWidget(self.btn_max_viewport)
 
-        # Canvas Scaling Mode Button
         self.btn_fit_mode = QPushButton("🔍 Fit: Aspect Ratio")
         self.btn_fit_mode.clicked.connect(self.toggle_fit_mode)
         top_bar.addWidget(self.btn_fit_mode)
 
         center_layout.addLayout(top_bar)
 
-        # Video Canvas - Expands to maximum window size
-        self.video_canvas = QLabel("Initializing Large Detection Viewport...")
+        self.video_canvas = QLabel("Initializing High-Performance Video Viewport...")
         self.video_canvas.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.video_canvas.setStyleSheet("""
@@ -466,7 +496,7 @@ class DashboardWindow(QMainWindow):
         center_layout.addWidget(self.video_canvas, 1)
 
         # ----------------------------------------------------------------------
-        # RIGHT ANALYTICS SIDEBAR (COMPACT 270px)
+        # RIGHT ANALYTICS SIDEBAR
         # ----------------------------------------------------------------------
         self.right_panel = QWidget()
         right_layout = QVBoxLayout(self.right_panel)
@@ -479,7 +509,6 @@ class DashboardWindow(QMainWindow):
         right_header.setStyleSheet("color: #00f0ff;")
         right_layout.addWidget(right_header)
 
-        # KPI Grid Layout
         kpi_widget = QWidget()
         kpi_grid = QVBoxLayout(kpi_widget)
         kpi_grid.setContentsMargins(0, 0, 0, 0)
@@ -516,7 +545,6 @@ class DashboardWindow(QMainWindow):
         self.track_table.verticalHeader().setVisible(False)
         right_layout.addWidget(self.track_table, 1)
 
-        # Assemble Main Layout
         main_layout.addWidget(self.left_panel)
         main_layout.addWidget(center_panel, 1)
         main_layout.addWidget(self.right_panel)
@@ -538,11 +566,43 @@ class DashboardWindow(QMainWindow):
         return card, lbl_val
 
     # --------------------------------------------------------------------------
-    # CONTROLS & TOGGLES
+    # MODEL & SPEED CONTROLS
     # --------------------------------------------------------------------------
 
+    def on_model_changed(self):
+        idx = self.model_combo.currentIndex()
+        if idx == 0:
+            m_path = "yolov8s-world.pt"
+            self.lbl_prompts.show()
+            self.txt_prompts.show()
+        elif idx == 1:
+            m_path = "yolo11n.pt"
+            self.lbl_prompts.hide()
+            self.txt_prompts.hide()
+        else:
+            m_path = "yolo11s.pt"
+            self.lbl_prompts.hide()
+            self.txt_prompts.hide()
+
+        prompts = [p.strip() for p in self.txt_prompts.text().split(",") if p.strip()]
+        self.engine.load_model(m_path, custom_prompts=prompts)
+        self.status_bar_label.setText(f"Stream Active: {os.path.basename(m_path)}")
+
+    def on_speed_changed(self):
+        idx = self.speed_combo.currentIndex()
+        if idx == 0:
+            self.engine.set_speed_preset("fast")
+        elif idx == 2:
+            self.engine.set_speed_preset("accurate")
+        else:
+            self.engine.set_speed_preset("balanced")
+
+    def on_prompts_updated(self):
+        prompts = [p.strip() for p in self.txt_prompts.text().split(",") if p.strip()]
+        if prompts:
+            self.engine.update_world_prompts(prompts)
+
     def toggle_max_viewport(self):
-        """Toggles sidebars on/off so video detection canvas takes 100% viewport space."""
         self.sidebars_visible = not self.sidebars_visible
         if self.sidebars_visible:
             self.left_panel.show()
@@ -560,7 +620,6 @@ class DashboardWindow(QMainWindow):
             """)
 
     def toggle_fit_mode(self):
-        """Toggles between Keep Aspect Ratio and Fill / Stretch Canvas."""
         self.stretch_mode = not self.stretch_mode
         if self.stretch_mode:
             self.btn_fit_mode.setText("🔍 Fill: Entire Viewport")
@@ -675,14 +734,12 @@ class DashboardWindow(QMainWindow):
     def update_image_and_stats(self, annotated_frame, stats, active_tracks):
         self.current_frame = annotated_frame.copy()
 
-        # 1. Canvas Image Conversion
         rgb_image = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_image.shape
         bytes_per_line = ch * w
         q_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
         pixmap = QPixmap.fromImage(q_img)
 
-        # Scale pixmap based on selected mode
         aspect_flag = Qt.AspectRatioMode.IgnoreAspectRatio if self.stretch_mode else Qt.AspectRatioMode.KeepAspectRatio
         scaled_pixmap = pixmap.scaled(
             self.video_canvas.size(),
@@ -691,7 +748,6 @@ class DashboardWindow(QMainWindow):
         )
         self.video_canvas.setPixmap(scaled_pixmap)
 
-        # 2. Update KPI Stats
         self.lbl_fps_val.setText(f"{stats['fps']:.1f}")
         self.lbl_lat_val.setText(f"{stats['latency_ms']:.1f} ms")
         self.lbl_active_val.setText(str(stats['active_tracks']))
@@ -699,7 +755,6 @@ class DashboardWindow(QMainWindow):
         self.lbl_people_val.setText(str(stats['person_count']))
         self.lbl_vehicles_val.setText(str(stats['vehicle_count'] + stats['other_count']))
 
-        # 3. Update Active Track Table
         self.track_table.setRowCount(len(active_tracks))
         for row_idx, track_data in enumerate(active_tracks):
             self.track_table.setItem(row_idx, 0, QTableWidgetItem(f"#{track_data['track_id']}"))
@@ -722,5 +777,5 @@ class DashboardWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = DashboardWindow()
-    window.showMaximized()  # Open maximized for largest viewport area
+    window.showMaximized()
     sys.exit(app.exec())
