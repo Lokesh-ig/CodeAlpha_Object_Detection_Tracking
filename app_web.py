@@ -1,11 +1,10 @@
 import sys
 import os
+import runpy
 
-frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
-if frontend_dir not in sys.path:
-    sys.path.insert(0, frontend_dir)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
-from frontend.app_web import main
-
-if __name__ == "__main__":
-    main()
+frontend_app = os.path.join(current_dir, "frontend", "app_web.py")
+runpy.run_path(frontend_app, run_name="__main__")
