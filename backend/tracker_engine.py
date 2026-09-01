@@ -13,8 +13,9 @@ from deep_sort_realtime.deepsort_tracker import DeepSort
 
 class ObjectTrackerEngine:
     """
-    High-Performance Modular Object Detection & Tracking Engine.
-    Supports Frame-Skipping Caching, Resolution Tuning, and YOLO-World Universal tracking.
+    High-Performance Instant Object Detection & Tracking Engine.
+    Tuned for instant frame-1 detection confirmation, track persistence (no flickering),
+    and open-world universal coverage.
     """
 
     COLOR_PALETTE = [
@@ -31,11 +32,14 @@ class ObjectTrackerEngine:
     ]
 
     DEFAULT_WORLD_PROMPTS = [
-        "person", "cell phone", "phone", "smartphone", "hand", "object",
-        "item", "bottle", "gadget", "card", "toy", "bag", "cup", "laptop", "vehicle"
+        "person", "human", "cell phone", "phone", "smartphone", "bottle",
+        "cup", "hand", "object", "item", "gadget", "card", "toy", "bag",
+        "laptop", "book", "tool", "box", "device", "accessory"
     ]
 
-    def __init__(self, model_path="yolov8s-world.pt", max_age=25, n_init=2, nms_max_overlap=0.7):
+    def __init__(self, model_path="yolov8s-world.pt", max_age=45, n_init=1, nms_max_overlap=0.7):
+        # max_age=45: Keeps tracking stable even if object moves quickly or flickers
+        # n_init=1: INSTANT TRACKING on the very first frame an object is detected!
         self.max_age = max_age
         self.n_init = n_init
         self.nms_max_overlap = nms_max_overlap
@@ -45,7 +49,7 @@ class ObjectTrackerEngine:
         self.custom_prompts = list(self.DEFAULT_WORLD_PROMPTS)
         self.load_model(model_path)
 
-        print("[TrackerEngine] Initializing DeepSORT...")
+        print("[TrackerEngine] Initializing DeepSORT with Instant Track Confirmation (n_init=1)...")
         self.tracker = DeepSort(
             max_age=self.max_age,
             n_init=self.n_init,
@@ -61,10 +65,10 @@ class ObjectTrackerEngine:
         self.previous_time = time.time()
         self.fps = 0.0
 
-        # Speed Optimization Caching
+        # Detection Settings (No skipping for max stability)
         self.last_detections = []
-        self.detection_interval = 1  # Run YOLO every N frames
-        self.yolo_imgsz = 416        # Fast inference resolution
+        self.detection_interval = 1  # Detect on EVERY single frame
+        self.yolo_imgsz = 512        # Optimal resolution for speed & small item detection
 
         # Video recording
         self.is_recording = False
@@ -91,24 +95,18 @@ class ObjectTrackerEngine:
             self.model = YOLO("yolo11n.pt")
 
     def set_speed_preset(self, preset_name):
-        """
-        Sets speed vs accuracy performance preset.
-        Presets:
-          - 'fast': imgsz=320, interval=2 (Max FPS ~30+)
-          - 'balanced': imgsz=416, interval=1 (Recommended ~15-25 FPS)
-          - 'accurate': imgsz=640, interval=1 (Max Precision ~5-15 FPS)
-        """
+        """Sets performance mode."""
         preset = preset_name.lower()
         if preset == "fast":
             self.yolo_imgsz = 320
-            self.detection_interval = 2
+            self.detection_interval = 1
         elif preset == "accurate":
             self.yolo_imgsz = 640
             self.detection_interval = 1
         else:  # balanced
-            self.yolo_imgsz = 416
+            self.yolo_imgsz = 512
             self.detection_interval = 1
-        print(f"[TrackerEngine] Speed Preset set to '{preset}': imgsz={self.yolo_imgsz}, interval={self.detection_interval}")
+        print(f"[TrackerEngine] Speed Preset set to '{preset}': imgsz={self.yolo_imgsz}")
 
     def update_world_prompts(self, prompt_list):
         """Updates text prompts for YOLO-World universal detection."""
@@ -143,7 +141,7 @@ class ObjectTrackerEngine:
     def process_frame(
         self,
         frame,
-        conf_threshold=0.35,
+        conf_threshold=0.25,
         iou_threshold=0.45,
         class_filter=None,
         show_trails=True,
@@ -153,7 +151,7 @@ class ObjectTrackerEngine:
         yolo_imgsz=None
     ):
         """
-        Processes a single frame for object detection and tracking with optimized speed.
+        Processes a single frame for instant object detection and stable tracking.
         """
         frame_start_time = time.time()
         self.frame_count += 1
@@ -163,59 +161,55 @@ class ObjectTrackerEngine:
         imgsz_to_use = yolo_imgsz if yolo_imgsz is not None else self.yolo_imgsz
 
         # ----------------------------------------------------
-        # 1. OPTIMIZED YOLO INFERENCE (WITH FRAME SKIPPING)
+        # 1. YOLO INFERENCE ON EVERY FRAME FOR INSTANT DETECTION
         # ----------------------------------------------------
-        if self.frame_count % self.detection_interval == 0 or not self.last_detections:
-            results = self.model(
-                frame,
-                conf=conf_threshold,
-                iou=iou_threshold,
-                imgsz=imgsz_to_use,
-                verbose=False
-            )
+        results = self.model(
+            frame,
+            conf=conf_threshold,
+            iou=iou_threshold,
+            imgsz=imgsz_to_use,
+            verbose=False
+        )
 
-            detections = []
-            if results and len(results) > 0 and results[0].boxes is not None:
-                for box in results[0].boxes:
-                    try:
-                        conf = float(box.conf[0].item())
-                        if conf < conf_threshold:
+        detections = []
+        if results and len(results) > 0 and results[0].boxes is not None:
+            for box in results[0].boxes:
+                try:
+                    conf = float(box.conf[0].item())
+                    if conf < conf_threshold:
+                        continue
+
+                    class_id = int(box.cls[0].item())
+
+                    if hasattr(self.model, "names") and isinstance(self.model.names, dict):
+                        class_name = self.model.names.get(class_id, "Object")
+                    elif hasattr(self.model, "names") and isinstance(self.model.names, list) and class_id < len(self.model.names):
+                        class_name = self.model.names[class_id]
+                    else:
+                        class_name = "Object"
+
+                    if class_filter and len(class_filter) > 0:
+                        if class_name.lower() not in [c.lower() for c in class_filter]:
                             continue
 
-                        class_id = int(box.cls[0].item())
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
 
-                        if hasattr(self.model, "names") and isinstance(self.model.names, dict):
-                            class_name = self.model.names.get(class_id, "Object")
-                        elif hasattr(self.model, "names") and isinstance(self.model.names, list) and class_id < len(self.model.names):
-                            class_name = self.model.names[class_id]
-                        else:
-                            class_name = "Object"
+                    x1 = max(0, min(x1, w - 1))
+                    y1 = max(0, min(y1, h - 1))
+                    x2 = max(0, min(x2, w - 1))
+                    y2 = max(0, min(y2, h - 1))
 
-                        if class_filter and len(class_filter) > 0:
-                            if class_name.lower() not in [c.lower() for c in class_filter]:
-                                continue
+                    box_w = x2 - x1
+                    box_h = y2 - y1
 
-                        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-
-                        x1 = max(0, min(x1, w - 1))
-                        y1 = max(0, min(y1, h - 1))
-                        x2 = max(0, min(x2, w - 1))
-                        y2 = max(0, min(y2, h - 1))
-
-                        box_w = x2 - x1
-                        box_h = y2 - y1
-
-                        if box_w > 0 and box_h > 0:
-                            detections.append(([x1, y1, box_w, box_h], conf, class_name))
-                    except Exception:
-                        continue
-            self.last_detections = detections
-        else:
-            detections = self.last_detections
+                    if box_w > 0 and box_h > 0:
+                        detections.append(([x1, y1, box_w, box_h], conf, class_name))
+                except Exception:
+                    continue
 
         # ----------------------------------------------------
-        # 2. DEEP SORT TRACKING
+        # 2. INSTANT DEEP SORT TRACKING
         # ----------------------------------------------------
         try:
             tracks = self.tracker.update_tracks(detections, frame=frame)
@@ -247,7 +241,7 @@ class ObjectTrackerEngine:
             confidence = float(confidence)
 
             c_lower = class_name.lower()
-            if c_lower == "person":
+            if c_lower in ["person", "human"]:
                 person_count += 1
             elif c_lower in vehicle_classes:
                 vehicle_count += 1
@@ -369,7 +363,7 @@ class ObjectTrackerEngine:
         return output_frame, stats, active_tracks_list
 
     def draw_hud_overlay(self, frame, stats):
-        """Draws a translucent HUD stats panel on the top-right of the frame to prevent badge collision."""
+        """Draws a translucent HUD stats panel on the top-right of the frame."""
         h, w = frame.shape[:2]
         panel_w = min(340, w - 20)
         panel_h = 165
