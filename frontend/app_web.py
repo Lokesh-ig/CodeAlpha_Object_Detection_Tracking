@@ -21,6 +21,13 @@ try:
 except ImportError:
     from tracker_engine import ObjectTrackerEngine
 
+try:
+    from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode, RTCConfiguration
+    import av
+    HAS_WEBRTC = True
+except ImportError:
+    HAS_WEBRTC = False
+
 
 # ==============================================================================
 # STREAMLIT PAGE CONFIGURATION & RESPONSIVE STYLING
@@ -78,6 +85,35 @@ st.markdown("""
 @st.cache_resource
 def get_tracker_engine(model_name="yolo11n.pt"):
     return ObjectTrackerEngine(model_name)
+
+
+# WebRTC Processor for Continuous Live Camera Tracking (No Take Photo Button!)
+if HAS_WEBRTC:
+    class ObjectTrackingVideoProcessor(VideoProcessorBase):
+        def __init__(self):
+            self.engine = get_tracker_engine()
+            self.conf_thresh = 0.10
+            self.iou_thresh = 0.45
+            self.show_trails = True
+            self.show_boxes = True
+            self.show_labels = True
+            self.show_hud = True
+
+        def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+            img = frame.to_ndarray(format="bgr24")
+            img = cv2.flip(img, 1)
+
+            annotated_frame, stats, active_tracks = self.engine.process_frame(
+                img,
+                conf_threshold=self.conf_thresh,
+                iou_threshold=self.iou_thresh,
+                show_trails=self.show_trails,
+                show_labels=self.show_labels,
+                show_boxes=self.show_boxes,
+                show_hud=self.show_hud
+            )
+
+            return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
 
 
 def main():
@@ -154,7 +190,7 @@ def main():
     input_source = st.sidebar.selectbox(
         "Input Source",
         [
-            "Live Camera Stream (Webcam)",
+            "Live WebRTC Camera Stream (Continuous 30+ FPS Live Tracking)",
             "📹 Demo Sample Video Stream (Auto-Loop Instant AI)",
             "Upload Video File (.mp4, .avi)",
             "Upload Image File (.jpg, .png)"
@@ -162,7 +198,6 @@ def main():
         index=0
     )
 
-    # Low light sensitive confidence slider default (0.10 default for dark/backlit rooms)
     conf_thresh = st.sidebar.slider("Confidence Threshold", 0.05, 0.95, 0.10, 0.05)
     iou_thresh = st.sidebar.slider("IoU Threshold", 0.05, 0.95, 0.45, 0.05)
 
@@ -201,94 +236,27 @@ def main():
     # STREAM PROCESSING LOOPS
     # --------------------------------------------------------------------------
 
-    if input_source == "Live Camera Stream (Webcam)":
-        if st.session_state.webcam_running:
-            if st.session_state.cap is None or not st.session_state.cap.isOpened():
-                try:
-                    st.session_state.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-                    if not st.session_state.cap.isOpened():
-                        st.session_state.cap = cv2.VideoCapture(0)
-                    st.session_state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-                    st.session_state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-                except Exception:
-                    st.session_state.cap = None
-
-            cap = st.session_state.cap
-            camera_active = False
-
-            if cap is not None and cap.isOpened():
-                video_placeholder = video_container.empty()
-                while st.session_state.webcam_running:
-                    ret, frame = cap.read()
-                    if not ret or frame is None:
-                        break
-
-                    camera_active = True
-                    st.session_state.frame_counter += 1
-                    frame = cv2.flip(frame, 1)
-
-                    annotated_frame, stats, active_tracks = engine.process_frame(
-                        frame,
-                        conf_threshold=conf_thresh,
-                        iou_threshold=iou_thresh,
-                        show_trails=show_trails,
-                        show_labels=show_labels,
-                        show_boxes=show_boxes,
-                        show_hud=show_hud
-                    )
-
-                    web_frame = cv2.resize(annotated_frame, (854, 480))
-                    rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
-                    video_placeholder.image(rgb_frame, channels="RGB", use_container_width=True)
-
-                    kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
-                    kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
-                    kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
-                    kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
-                    kpi_people.metric("PEOPLE COUNT", stats['person_count'])
-
-                    if st.session_state.frame_counter % 3 == 0:
-                        if active_tracks:
-                            df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
-                            table_placeholder.dataframe(df, use_container_width=True)
-                        else:
-                            table_placeholder.text("No active objects currently tracked.")
-
-                    time.sleep(0.005)
-
-            if not camera_active:
-                with video_container:
-                    img_file_buffer = st.camera_input("📷 Live Camera Stream (Click 'Take Photo' below to activate live AI tracking)")
-                    video_output = st.empty()
-                    if img_file_buffer is not None:
-                        bytes_data = img_file_buffer.getvalue()
-                        frame = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
-
-                        annotated_frame, stats, active_tracks = engine.process_frame(
-                            frame,
-                            conf_threshold=conf_thresh,
-                            iou_threshold=iou_thresh,
-                            show_trails=show_trails,
-                            show_labels=show_labels,
-                            show_boxes=show_boxes,
-                            show_hud=show_hud
-                        )
-
-                        web_frame = cv2.resize(annotated_frame, (854, 480))
-                        rgb_frame = cv2.cvtColor(web_frame, cv2.COLOR_BGR2RGB)
-                        video_output.image(rgb_frame, channels="RGB", use_container_width=True)
-
-                        kpi_fps.metric("FPS", f"{stats['fps']:.1f}")
-                        kpi_lat.metric("LATENCY", f"{stats['latency_ms']:.1f} ms")
-                        kpi_active.metric("ACTIVE TRACKS", stats['active_tracks'])
-                        kpi_unique.metric("TOTAL UNIQUE IDs", stats['total_unique_tracks'])
-                        kpi_people.metric("PEOPLE COUNT", stats['person_count'])
-
-                        if active_tracks:
-                            df = pd.DataFrame(active_tracks)[["track_id", "class", "confidence", "center", "bbox"]]
-                            table_placeholder.dataframe(df, use_container_width=True)
-                        else:
-                            table_placeholder.text("No active objects detected in this snapshot. Try lowering Confidence Threshold in sidebar.")
+    if input_source == "Live WebRTC Camera Stream (Continuous 30+ FPS Live Tracking)":
+        with video_container:
+            if HAS_WEBRTC:
+                ctx = webrtc_streamer(
+                    key="live-tracking-webcam",
+                    mode=WebRtcMode.SENDRECV,
+                    rtc_configuration=RTCConfiguration(
+                        {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+                    ),
+                    video_processor_factory=ObjectTrackingVideoProcessor,
+                    async_processing=True,
+                )
+                if ctx.video_processor:
+                    ctx.video_processor.conf_thresh = conf_thresh
+                    ctx.video_processor.iou_thresh = iou_thresh
+                    ctx.video_processor.show_trails = show_trails
+                    ctx.video_processor.show_boxes = show_boxes
+                    ctx.video_processor.show_labels = show_labels
+                    ctx.video_processor.show_hud = show_hud
+            else:
+                st.error("streamlit-webrtc dependency not found.")
 
     elif input_source == "📹 Demo Sample Video Stream (Auto-Loop Instant AI)":
         with video_container:
